@@ -1,0 +1,12 @@
+{
+  "server": { "host": "127.0.0.1", "port": 8787 },
+  "llm": {
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-v4-flash",
+    "reasoner_model": "deepseek-v4-pro",
+    "max_agent_steps": 6,
+    "request_timeout_ms": 120000
+  },
+  "memory": { "short_ttl_days": 7, "digest_trigger_count": 10 },
+  "budget": { "daily_cny": 2 }
+}
