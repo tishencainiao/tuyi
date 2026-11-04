@@ -29,7 +29,7 @@ tuyi/
 │   ├── agent.js         #   ReAct 主循环（工具调用 ≤6 步）
 │   ├── tools.js         #   工具注册与分发（自动加载 tools/）
 │   └── prompts/         #   提示词（persona.md 人设）
-├── tools/               # 工具实现（plan-trip 行程校验）
+├── tools/               # 工具实现（plan_trip 校验、高德 POI、天气）
 ├── web/                 # 前端三页
 ├── test/                # 冒烟测试（node test/smoke.js）
 └── docs/                # 设计文档（plan.md 方案定稿）
@@ -47,12 +47,13 @@ node server.js            # 打开 http://127.0.0.1:8787
 # 3. 自检与测试
 node check.js             # 语法 + 配置 + 工具注册
 node test/smoke.js        # 冒烟测试（不联网）
+node test/live.js         # 手动联网联调（需 Key + 网络，会真实调用 DeepSeek 和高德）
 ```
 
 ## 里程碑
 
 1. **骨架跑通**（已完成）：流式聊天 + 行程工具 + 三页占位。
-2. **行程生成**：高德 POI / 天气接入，行程卡片渲染。
+2. **行程生成**（已完成）：高德 POI / 天气接入，行程卡片接真实数据。
 3. **个性化记忆**：分层记忆 + 记忆消化（Python 轻量版）。
 4. **数据看板**：偏好统计 + 个人中心。
 5. **收尾**：测试、演示数据、论文素材（架构图 / 提示词设计 / 消融实验）。

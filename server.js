@@ -15,31 +15,8 @@ const path = require('node:path');
 const ROOT = __dirname;
 const WEB_DIR = path.join(ROOT, 'web');
 
-// .env 缺失也能启动：只有真正调用模型时才需要密钥
-// 兼容 Node 18（没有 process.loadEnvFile 时手动解析）
-function loadEnv() {
-  const envPath = path.join(ROOT, '.env');
-  if (typeof process.loadEnvFile === 'function') {
-    try {
-      process.loadEnvFile(envPath);
-      return;
-    } catch {
-      /* 没有 .env 时继续走手动解析 */
-    }
-  }
-  try {
-    const text = fs.readFileSync(envPath, 'utf8');
-    for (const line of text.split(/\r?\n/)) {
-      const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
-      if (match && process.env[match[1]] === undefined) {
-        process.env[match[1]] = match[2].replace(/^["']|["']$/g, '');
-      }
-    }
-  } catch {
-    /* 没有 .env 时忽略 */
-  }
-}
-loadEnv();
+// .env 缺失也能启动：只有真正调用模型时才需要密钥（兼容 Node 18）
+require('./brain/env').loadEnv(ROOT);
 
 const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8'));
 const { runAgent } = require('./brain/agent');

@@ -83,6 +83,57 @@ const sample = {
     await assert.rejects(() => tools.dispatch('not_exist', {}), /未知工具/);
   });
 
+  await check('工具注册包含 search_poi / get_weather', () => {
+    const names = tools.defs().map((def) => def.function.name);
+    assert.ok(names.includes('search_poi'), '缺少 search_poi：' + names.join(','));
+    assert.ok(names.includes('get_weather'), '缺少 get_weather：' + names.join(','));
+  });
+
+  await check('高德 POI 结果解析', () => {
+    const { formatPoi } = require('../tools/_amap');
+    const poi = formatPoi({
+      name: '宽窄巷子',
+      address: '青羊区长顺上街',
+      location: '104.055,30.669',
+      type: '风景名胜',
+      tel: '028-12345678',
+      biz_ext: { rating: '4.5', cost: '0' },
+    });
+    assert.strictEqual(poi.name, '宽窄巷子');
+    assert.deepStrictEqual(poi.location, { lng: 104.055, lat: 30.669 });
+    assert.strictEqual(poi.rating, 4.5);
+  });
+
+  await check('天气结果解析', () => {
+    const { formatWeatherDay } = require('../tools/_amap');
+    const day = formatWeatherDay({
+      date: '2026-11-05',
+      week: '5',
+      dayweather: '多云',
+      nightweather: '小雨',
+      daytemp: '19',
+      nighttemp: '12',
+      daywind: '北风',
+      daypower: '3',
+    });
+    assert.strictEqual(day.date, '2026-11-05');
+    assert.strictEqual(day.day, '多云');
+    assert.strictEqual(day.dayTemp, 19);
+    assert.strictEqual(day.wind, '北风3');
+  });
+
+  await check('缺少 AMAP_KEY 时 search_poi 优雅报错', async () => {
+    const saved = process.env.AMAP_KEY;
+    delete process.env.AMAP_KEY;
+    try {
+      const result = await tools.dispatch('search_poi', { keywords: '宽窄巷子', city: '成都' });
+      assert.strictEqual(result.ok, false);
+      assert.match(String(result.error), /AMAP_KEY/);
+    } finally {
+      if (saved !== undefined) process.env.AMAP_KEY = saved;
+    }
+  });
+
   console.log('\n冒烟测试：' + passed + ' 通过 / ' + failed + ' 失败');
   if (failed) process.exitCode = 1;
 })();

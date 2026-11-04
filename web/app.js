@@ -106,9 +106,18 @@
         }
         bubble.textContent += evt.text;
         break;
-      case 'tool_start':
-        hintEl.textContent = '正在整理行程…';
+      case 'tool_start': {
+        const label =
+          evt.name === 'plan_trip'
+            ? '整理行程'
+            : evt.name === 'search_poi'
+              ? '查询景点'
+              : evt.name === 'get_weather'
+                ? '查询天气'
+                : '处理';
+        hintEl.textContent = '正在' + label + '…';
         break;
+      }
       case 'tool_result':
         hintEl.textContent = '';
         break;
