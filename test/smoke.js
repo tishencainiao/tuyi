@@ -134,6 +134,41 @@ const sample = {
     }
   });
 
+  await check('记忆：抽取 JSON 容错解析', () => {
+    const { parseJsonLoose } = require('../brain/llm');
+    const parsed = parseJsonLoose('```json\n{"facts":[{"text":"喜欢自然风光","tags":["自然风光"]}]}\n```');
+    assert.ok(parsed && parsed.facts.length === 1);
+    assert.strictEqual(parsed.facts[0].text, '喜欢自然风光');
+  });
+
+  await check('记忆：事实入库、去重与注入块', () => {
+    const memory = require('../brain/memory');
+    const record = memory.emptyRecord('smoke-user');
+    const added = memory.addFacts(record, [
+      { text: '带父母出行，预算中等，怕累', tags: ['带父母', '预算中等'] },
+      { text: '喜欢自然风光', tags: ['自然风光'] },
+    ]);
+    assert.strictEqual(added, 2);
+    assert.strictEqual(record.state.memoriesSinceDigest, 2);
+
+    const block = memory.renderBlock(record, '想带父母去成都');
+    assert.match(block, /用户记忆/);
+    assert.match(block, /带父母/);
+
+    const again = memory.addFacts(record, [{ text: '带父母出行，预算中等，怕累' }]);
+    assert.strictEqual(again, 0);
+  });
+
+  await check('记忆：消化触发与计数', () => {
+    const memory = require('../brain/memory');
+    const record = memory.emptyRecord('smoke-user');
+    record.state.memoriesSinceDigest = 3;
+    assert.strictEqual(memory.digestDue(record, { digest_trigger_count: 3 }).due, true);
+    memory.markDigest(record);
+    assert.strictEqual(memory.digestDue(record, { digest_trigger_count: 3 }).due, false);
+    assert.strictEqual(record.state.memoriesSinceDigest, 0);
+  });
+
   console.log('\n冒烟测试：' + passed + ' 通过 / ' + failed + ' 失败');
   if (failed) process.exitCode = 1;
 })();

@@ -7,6 +7,11 @@
     "max_agent_steps": 6,
     "request_timeout_ms": 120000
   },
-  "memory": { "short_ttl_days": 7, "digest_trigger_count": 10 },
+  "memory": {
+    "short_ttl_days": 7,
+    "digest_trigger_count": 2,
+    "digest_min_interval_minutes": 1,
+    "max_inject_memories": 5
+  },
   "budget": { "daily_cny": 2 }
 }

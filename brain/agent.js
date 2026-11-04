@@ -3,12 +3,15 @@
 /**
  * ReAct 主循环：思考 → 工具调用 → 结果回喂 → …（最多 max_agent_steps 步）
  * 产出事件：{type:'delta'} | {type:'tool_start'} | {type:'tool_result'} | {type:'itinerary'} | {type:'done'} | {type:'error'}
+ *
+ * 记忆：开轮时把「分层记忆」注入系统提示；收尾时抽取本轮事实、必要时触发 Python 记忆消化。
  */
 
 const fs = require('node:fs');
 const path = require('node:path');
 const { chatStream } = require('./llm');
 const tools = require('./tools');
+const memory = require('./memory');
 
 const PROMPT_DIR = path.join(__dirname, 'prompts');
 const promptCache = new Map();
@@ -20,14 +23,30 @@ function loadPrompt(name) {
   return promptCache.get(name);
 }
 
+async function rememberSafely(args) {
+  try {
+    await memory.rememberTurn(args);
+  } catch {
+    /* 记忆写入失败不影响本轮对话 */
+  }
+}
+
 async function* runAgent({ cfg, userId, userText }) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   const llmCfg = cfg.llm || {};
   const maxSteps = Math.max(1, Number(llmCfg.max_agent_steps) || 6);
+
+  const record = memory.load(userId);
+  const memoryBlock = memory.renderBlock(record, userText, cfg.memory || {});
+  if (process.env.TUYI_DEBUG_MEMORY && memoryBlock) {
+    console.error('[memory-block]\n' + memoryBlock);
+  }
+
   const messages = [
-    { role: 'system', content: loadPrompt('persona.md') },
+    { role: 'system', content: loadPrompt('persona.md') + (memoryBlock ? '\n\n' + memoryBlock : '') },
     { role: 'user', content: userText },
   ];
+  let finalText = '';
 
   for (let step = 1; step <= maxSteps; step += 1) {
     const toolCalls = [];
@@ -48,8 +67,10 @@ async function* runAgent({ cfg, userId, userText }) {
       }
       if (event.toolCalls) toolCalls.push(...event.toolCalls);
     }
+    finalText = text;
 
     if (toolCalls.length === 0) {
+      await rememberSafely({ cfg, userId, userText, assistantText: finalText });
       yield { type: 'done', steps: step };
       return;
     }
@@ -84,6 +105,7 @@ async function* runAgent({ cfg, userId, userText }) {
     }
   }
 
+  await rememberSafely({ cfg, userId, userText, assistantText: finalText });
   yield { type: 'done', steps: maxSteps, note: '达到最大步数，已停止工具循环' };
 }
 

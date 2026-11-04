@@ -112,4 +112,42 @@ async function* chatStream({
   yield* emitToolCalls();
 }
 
-module.exports = { chatStream, buildEndpoint };
+async function chatOnce({ apiKey, baseUrl, model, messages, temperature = 0.2, timeoutMs = DEFAULT_TIMEOUT_MS }) {
+  if (!apiKey) {
+    throw new Error('缺少 DEEPSEEK_API_KEY：请复制 .env.example 为 .env 并填写密钥');
+  }
+  const payload = { model, messages, stream: false, temperature };
+  const resp = await fetch(buildEndpoint(baseUrl), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => '');
+    throw new Error('LLM 请求失败（HTTP ' + resp.status + '）：' + detail.slice(0, 300));
+  }
+  const data = await resp.json();
+  const choice = data.choices && data.choices[0];
+  return {
+    text: String((choice && choice.message && choice.message.content) || ''),
+    usage: data.usage || null,
+  };
+}
+
+function parseJsonLoose(text) {
+  const raw = String(text || '')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '');
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  try {
+    return JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+module.exports = { chatStream, chatOnce, buildEndpoint, parseJsonLoose };
