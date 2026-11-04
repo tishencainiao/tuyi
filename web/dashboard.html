@@ -22,12 +22,37 @@
     </nav>
   </header>
 
-  <main class="page">
-    <h1>偏好统计看板</h1>
-    <p class="muted">
-      开发中：等「记忆消化」模块接入后，这里用 ECharts 展示偏好标签分布、热门目的地、预算分布与提问意图统计。
-      当前可先在聊天页体验流式对话与行程卡片。
-    </p>
+  <main class="page wide">
+    <div class="page-head">
+      <h1>偏好统计看板</h1>
+      <p class="muted">数据来自 <code>data/memory</code>：用户记忆、行程与提问的自动汇总。没有数据时可以先聊几轮，或运行 <code>node scripts/seed-demo.js</code> 生成演示数据。</p>
+    </div>
+
+    <div id="kpis" class="kpis"></div>
+
+    <div class="charts">
+      <section class="chart-card">
+        <h2>偏好标签分布</h2>
+        <div id="chart-tags" class="chart"></div>
+      </section>
+      <section class="chart-card">
+        <h2>目的地 Top</h2>
+        <div id="chart-cities" class="chart"></div>
+      </section>
+      <section class="chart-card">
+        <h2>预算档位分布</h2>
+        <div id="chart-budget" class="chart"></div>
+      </section>
+      <section class="chart-card">
+        <h2>提问意图分布</h2>
+        <div id="chart-intent" class="chart"></div>
+      </section>
+    </div>
+
+    <p class="muted" id="empty-hint"></p>
   </main>
+
+  <script src="/vendor/echarts.min.js"></script>
+  <script src="/dashboard.js"></script>
 </body>
 </html>

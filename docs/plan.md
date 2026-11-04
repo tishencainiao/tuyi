@@ -28,7 +28,7 @@ Node 复用 Momo 大脑（流式 DeepSeek + 工具循环）＋ Web 三页（聊�
 1. 骨架跑通：SSE 聊天 + plan_trip 工具（已完成）
 2. 行程生成：高德 POI / 天气 + 行程卡片接真实数据（已完成 v0.2.0）
 3. 个性化：分层记忆 + 记忆消化（Python）（已完成 v0.3.0）
-4. 数据看板：偏好统计 + 个人中心
+4. 数据看板：偏好统计 + 个人中心（已完成 v0.4.0）
 5. 收尾：测试、演示数据、论文素材（架构图、消融实验）
 
 ## 四、待办
@@ -41,3 +41,4 @@ Node 复用 Momo 大脑（流式 DeepSeek + 工具循环）＋ Web 三页（聊�
 
 - v0.2.0（2026-11-04）：接入高德 POI / 天气工具（tools/amap-poi.js、amap-weather.js），人设加入「先查景点 / 天气再排行程」，前端工具提示细化；新增 test/live.js 联网联调与 docs/development.md 开发规范。
 - v0.3.0（2026-11-04）：分层记忆（brain/memory.js：对话抽取事实 → 去重入库 → 关键词检索注入）+ 记忆消化（py/digest.py：反思合成偏好标签与一句话认识，下一轮自动注入）；冒烟 13 项全过；两轮联网联调验证「第二轮自动贴合偏好」。
+- v0.4.0（2026-11-04）：偏好统计（brain/stats.js：标签 / 目的地 / 预算 / 意图规则分类）+ 看板页（ECharts 本地化，web/vendor/echarts.min.js）+ 个人中心（画像 / 记忆 / 行程）；新增 /api/stats、/api/profile 与 scripts/seed-demo.js 演示数据；冒烟 16 项全过。

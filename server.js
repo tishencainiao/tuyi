@@ -21,6 +21,8 @@ require('./brain/env').loadEnv(ROOT);
 const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8'));
 const { runAgent } = require('./brain/agent');
 const tools = require('./brain/tools');
+const memory = require('./brain/memory');
+const stats = require('./brain/stats');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -123,10 +125,28 @@ function health() {
   };
 }
 
+function handleProfile(url, res) {
+  const userId = String(url.searchParams.get('userId') || '').trim();
+  if (!userId) return sendJSON(res, 400, { error: '缺少 userId' });
+  const record = memory.load(userId);
+  return sendJSON(res, 200, {
+    userId: record.userId,
+    created: record.created,
+    insights: record.insights,
+    memories: (record.memories || []).slice(-20).reverse(),
+    itineraries: (record.itineraries || []).slice(-10).reverse(),
+    turnsCount: (record.turns || []).length,
+  });
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url || '/', 'http://' + (req.headers.host || 'localhost'));
   if (req.method === 'POST' && url.pathname === '/api/chat') return handleChat(req, res);
   if (req.method === 'GET' && url.pathname === '/api/health') return sendJSON(res, 200, health());
+  if (req.method === 'GET' && url.pathname === '/api/stats') {
+    return sendJSON(res, 200, stats.computeStats(stats.collectRecords()));
+  }
+  if (req.method === 'GET' && url.pathname === '/api/profile') return handleProfile(url, res);
   if (req.method === 'GET' || req.method === 'HEAD') return sendStatic(res, url.pathname);
   return sendJSON(res, 405, { error: 'method not allowed' });
 });

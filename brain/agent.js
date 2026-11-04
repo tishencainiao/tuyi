@@ -47,6 +47,7 @@ async function* runAgent({ cfg, userId, userText }) {
     { role: 'user', content: userText },
   ];
   let finalText = '';
+  let lastItinerary = null;
 
   for (let step = 1; step <= maxSteps; step += 1) {
     const toolCalls = [];
@@ -70,7 +71,7 @@ async function* runAgent({ cfg, userId, userText }) {
     finalText = text;
 
     if (toolCalls.length === 0) {
-      await rememberSafely({ cfg, userId, userText, assistantText: finalText });
+      await rememberSafely({ cfg, userId, userText, assistantText: finalText, itinerary: lastItinerary });
       yield { type: 'done', steps: step };
       return;
     }
@@ -100,12 +101,15 @@ async function* runAgent({ cfg, userId, userText }) {
         result = { ok: false, error: err && err.message ? err.message : String(err) };
       }
       yield { type: 'tool_result', name: call.name, ok: result.ok !== false };
-      if (result && result.itinerary) yield { type: 'itinerary', value: result.itinerary };
+      if (result && result.itinerary) {
+        lastItinerary = result.itinerary;
+        yield { type: 'itinerary', value: result.itinerary };
+      }
       messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
     }
   }
 
-  await rememberSafely({ cfg, userId, userText, assistantText: finalText });
+  await rememberSafely({ cfg, userId, userText, assistantText: finalText, itinerary: lastItinerary });
   yield { type: 'done', steps: maxSteps, note: '达到最大步数，已停止工具循环' };
 }
 

@@ -23,10 +23,19 @@
   </header>
 
   <main class="page">
-    <h1>个人中心</h1>
-    <p class="muted">
-      开发中：这里将展示用户画像（常去城市、预算偏好、同行人、节奏偏好）、记忆消化产出的「关于你的认识」与近期行程记录。
-    </p>
+    <div class="page-head">
+      <h1>个人中心</h1>
+      <p class="muted">查看某位用户的偏好画像、记忆条目与行程记录（默认取当前浏览器的用户 ID）。</p>
+    </div>
+
+    <div class="profile-bar">
+      <input id="uid" type="text" placeholder="用户 ID，例如 live-test" />
+      <button id="load" type="button">加载</button>
+    </div>
+
+    <div id="profile-body" class="profile-body"></div>
   </main>
+
+  <script src="/profile.js"></script>
 </body>
 </html>

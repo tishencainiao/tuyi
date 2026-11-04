@@ -19,6 +19,7 @@ const ROOT = path.join(__dirname, '..');
 const DATA_DIR = process.env.TUYI_DATA_DIR || path.join(ROOT, 'data', 'memory');
 const MAX_TURNS = 40;
 const MAX_MEMORIES = 200;
+const MAX_ITINERARIES = 20;
 
 const promptCache = new Map();
 
@@ -43,6 +44,7 @@ function emptyRecord(userId) {
     created: new Date().toISOString(),
     turns: [],
     memories: [],
+    itineraries: [],
     insights: null,
     state: { lastDigestAt: null, memoriesSinceDigest: 0 },
   };
@@ -54,6 +56,7 @@ function load(userId) {
     const record = JSON.parse(raw);
     record.turns = Array.isArray(record.turns) ? record.turns : [];
     record.memories = Array.isArray(record.memories) ? record.memories : [];
+    record.itineraries = Array.isArray(record.itineraries) ? record.itineraries : [];
     record.state = record.state || { lastDigestAt: null, memoriesSinceDigest: 0 };
     return record;
   } catch {
@@ -104,6 +107,21 @@ function addFacts(record, facts) {
   if (record.memories.length > MAX_MEMORIES) record.memories = record.memories.slice(-MAX_MEMORIES);
   record.state.memoriesSinceDigest = (record.state.memoriesSinceDigest || 0) + added;
   return added;
+}
+
+function appendItinerary(record, itinerary) {
+  if (!itinerary || !itinerary.destination || !Array.isArray(itinerary.days)) return false;
+  record.itineraries.push({
+    ts: new Date().toISOString(),
+    title: String(itinerary.title || ''),
+    destination: String(itinerary.destination),
+    budget_cny: Number(itinerary.budget_cny) || 0,
+    days: itinerary.days.slice(0, 10),
+  });
+  if (record.itineraries.length > MAX_ITINERARIES) {
+    record.itineraries = record.itineraries.slice(-MAX_ITINERARIES);
+  }
+  return true;
 }
 
 function bigrams(text) {
@@ -211,10 +229,11 @@ async function extractFacts({ cfg, userText, assistantText }) {
     }));
 }
 
-async function rememberTurn({ cfg, userId, userText, assistantText }) {
+async function rememberTurn({ cfg, userId, userText, assistantText, itinerary }) {
   const record = load(userId);
   appendTurn(record, 'user', userText);
   if (assistantText) appendTurn(record, 'assistant', assistantText);
+  if (itinerary) appendItinerary(record, itinerary);
   try {
     const facts = await extractFacts({ cfg, userText, assistantText });
     addFacts(record, facts);
@@ -239,6 +258,7 @@ module.exports = {
   save,
   appendTurn,
   addFacts,
+  appendItinerary,
   bigrams,
   retrieve,
   renderBlock,

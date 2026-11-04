@@ -169,6 +169,52 @@ const sample = {
     assert.strictEqual(record.state.memoriesSinceDigest, 0);
   });
 
+  await check('记忆：行程入库', () => {
+    const memory = require('../brain/memory');
+    const record = memory.emptyRecord('smoke-trip');
+    memory.appendItinerary(record, { destination: '成都', title: '成都三天', budget_cny: 3000, days: [{}, {}] });
+    assert.strictEqual(record.itineraries.length, 1);
+    assert.strictEqual(record.itineraries[0].destination, '成都');
+  });
+
+  await check('统计：意图分类与预算分档', () => {
+    const stats = require('../brain/stats');
+    assert.strictEqual(stats.classifyIntent('帮我排个三天行程'), '行程规划');
+    assert.strictEqual(stats.classifyIntent('宽窄巷子门票多少'), '景点查询');
+    assert.strictEqual(stats.classifyIntent('明天会不会下雨'), '天气');
+    assert.strictEqual(stats.budgetBucket('预算 3000 元'), '中档（1500-4000）');
+    assert.strictEqual(stats.budgetBucket('预算中等'), '中档（1500-4000）');
+    assert.strictEqual(stats.budgetBucket('随便'), '未说明');
+  });
+
+  await check('统计：多用户汇总', () => {
+    const stats = require('../brain/stats');
+    const records = [
+      {
+        userId: 'a',
+        memories: [{ text: '带父母去成都，预算中等', tags: ['带父母'] }],
+        insights: { summary: 's', tags: ['慢节奏'] },
+        itineraries: [{ destination: '成都' }],
+        turns: [
+          { role: 'user', text: '帮我排个行程' },
+          { role: 'assistant', text: '好的' },
+        ],
+      },
+      {
+        userId: 'b',
+        memories: [{ text: '预算 5000 元去云南', tags: ['自然风光'] }],
+        itineraries: [],
+        turns: [{ role: 'user', text: '云南天气怎么样' }],
+      },
+    ];
+    const result = stats.computeStats(records);
+    assert.strictEqual(result.totals.users, 2);
+    assert.strictEqual(result.totals.memories, 2);
+    assert.strictEqual(result.totals.itineraries, 1);
+    assert.ok(result.tagDistribution.length >= 2);
+    assert.ok(result.intentDistribution.length >= 2);
+  });
+
   console.log('\n冒烟测试：' + passed + ' 通过 / ' + failed + ' 失败');
   if (failed) process.exitCode = 1;
 })();
