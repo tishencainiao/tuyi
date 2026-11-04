@@ -60,3 +60,7 @@ node test/smoke.js        # 冒烟测试（不联网）
 ## 复用说明
 
 骨架由 Momo（`E:\Learn\Momo`）的「大脑」改造而来：Agent 主循环、插件式工具、分层记忆、流式调用。已去掉 QQ / 桌宠接入层，前端换成 Web。复用清单见 `E:\Learn\Momo\docs\graduation-project-reuse.md`。
+
+## 许可证
+
+MIT © 2026 tishencainiao。详见 [LICENSE](LICENSE)。
