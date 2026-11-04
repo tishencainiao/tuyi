@@ -63,7 +63,18 @@ node scripts/seed-demo.js                     # 生成演示数据（看板 / �
 2. **行程生成**（已完成）：高德 POI / 天气接入，行程卡片接真实数据。
 3. **个性化记忆**（已完成）：分层记忆 + 记忆消化（Python 轻量版）。
 4. **数据看板**（已完成）：偏好统计（标签 / 目的地 / 预算 / 意图）+ 个人中心（画像 / 记忆 / 行程）。
-5. **收尾**：测试、演示数据、论文素材（架构图 / 提示词设计 / 消融实验）。
+5. **收尾**（已完成）：测试、演示数据、论文素材（架构图 / 提示词设计 / 消融实验 / 答辩脚本）。
+
+## 文档
+
+| 文档 | 内容 |
+|---|---|
+| [docs/plan.md](docs/plan.md) | 方案定稿（选型 / 里程碑 / 变更记录） |
+| [docs/architecture.md](docs/architecture.md) | 系统架构与数据流（论文第 3 章） |
+| [docs/prompt-engineering.md](docs/prompt-engineering.md) | 提示词设计与防幻觉策略（论文第 4 章） |
+| [docs/ablation.md](docs/ablation.md) | 消融实验设计（论文第 5 章） |
+| [docs/demo.md](docs/demo.md) | 答辩演示脚本 |
+| [docs/development.md](docs/development.md) | 开发规范（提交 / 版本 / 测试 / 密钥红线） |
 
 ## 复用说明
 

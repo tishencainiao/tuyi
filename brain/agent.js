@@ -36,9 +36,10 @@ async function* runAgent({ cfg, userId, userText }) {
   const llmCfg = cfg.llm || {};
   const maxSteps = Math.max(1, Number(llmCfg.max_agent_steps) || 6);
 
-  const record = memory.load(userId);
-  const memoryBlock = memory.renderBlock(record, userText, cfg.memory || {});
-  if (process.env.TUYI_DEBUG_MEMORY && memoryBlock) {
+  const memoryEnabled = process.env.TUYI_DISABLE_MEMORY !== '1';
+  const record = memoryEnabled ? memory.load(userId) : memory.emptyRecord(userId);
+  const memoryBlock = memoryEnabled ? memory.renderBlock(record, userText, cfg.memory || {}) : '';
+  if (memoryEnabled && process.env.TUYI_DEBUG_MEMORY && memoryBlock) {
     console.error('[memory-block]\n' + memoryBlock);
   }
 
@@ -71,7 +72,9 @@ async function* runAgent({ cfg, userId, userText }) {
     finalText = text;
 
     if (toolCalls.length === 0) {
-      await rememberSafely({ cfg, userId, userText, assistantText: finalText, itinerary: lastItinerary });
+      if (memoryEnabled) {
+        await rememberSafely({ cfg, userId, userText, assistantText: finalText, itinerary: lastItinerary });
+      }
       yield { type: 'done', steps: step };
       return;
     }
@@ -109,7 +112,9 @@ async function* runAgent({ cfg, userId, userText }) {
     }
   }
 
-  await rememberSafely({ cfg, userId, userText, assistantText: finalText, itinerary: lastItinerary });
+  if (memoryEnabled) {
+    await rememberSafely({ cfg, userId, userText, assistantText: finalText, itinerary: lastItinerary });
+  }
   yield { type: 'done', steps: maxSteps, note: '达到最大步数，已停止工具循环' };
 }
 
