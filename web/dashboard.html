@@ -24,32 +24,55 @@
 
   <main class="page wide">
     <div class="page-head">
-      <h1>偏好统计看板</h1>
-      <p class="muted">数据来自 <code>data/memory</code>：用户记忆、行程与提问的自动汇总（全局统计，含演示数据）。没有数据时可以先聊几轮，或运行 <code>node scripts/seed-demo.js</code> 生成演示数据。</p>
+      <h1>偏好统计</h1>
+      <div class="view-tabs" id="view-tabs">
+        <button type="button" class="view-tab active" data-view="personal">我的旅行</button>
+        <button type="button" class="view-tab" data-view="global">全局统计（含演示数据）</button>
+      </div>
     </div>
 
-    <div id="kpis" class="kpis"></div>
+    <section id="view-personal">
+      <div id="personal-kpis" class="kpis"></div>
+      <div class="charts">
+        <section class="chart-card">
+          <h2>我去过的城市</h2>
+          <div id="chart-my-cities" class="chart"></div>
+        </section>
+        <section class="chart-card">
+          <h2>我的偏好标签</h2>
+          <div id="chart-my-tags" class="chart"></div>
+        </section>
+      </div>
+      <section class="panel">
+        <h2>城市足迹</h2>
+        <div id="my-cities-table"></div>
+      </section>
+      <p class="muted" id="personal-hint"></p>
+    </section>
 
-    <div class="charts">
-      <section class="chart-card">
-        <h2>偏好标签分布</h2>
-        <div id="chart-tags" class="chart"></div>
-      </section>
-      <section class="chart-card">
-        <h2>目的地 Top</h2>
-        <div id="chart-cities" class="chart"></div>
-      </section>
-      <section class="chart-card">
-        <h2>预算档位分布</h2>
-        <div id="chart-budget" class="chart"></div>
-      </section>
-      <section class="chart-card">
-        <h2>提问意图分布</h2>
-        <div id="chart-intent" class="chart"></div>
-      </section>
-    </div>
-
-    <p class="muted" id="empty-hint"></p>
+    <section id="view-global" style="display:none">
+      <p class="muted">全局数据来自 <code>data/memory</code>：所有用户记忆、行程与提问的自动汇总（含演示数据）。</p>
+      <div id="kpis" class="kpis"></div>
+      <div class="charts">
+        <section class="chart-card">
+          <h2>偏好标签分布</h2>
+          <div id="chart-tags" class="chart"></div>
+        </section>
+        <section class="chart-card">
+          <h2>目的地 Top</h2>
+          <div id="chart-cities" class="chart"></div>
+        </section>
+        <section class="chart-card">
+          <h2>预算档位分布</h2>
+          <div id="chart-budget" class="chart"></div>
+        </section>
+        <section class="chart-card">
+          <h2>提问意图分布</h2>
+          <div id="chart-intent" class="chart"></div>
+        </section>
+      </div>
+      <p class="muted" id="empty-hint"></p>
+    </section>
   </main>
 
   <script src="/vendor/echarts.min.js"></script>

@@ -304,6 +304,29 @@ const sample = {
     }
   });
 
+  await check('统计：个人旅行画像（目的地归一化与聚合）', () => {
+    const stats = require('../brain/stats');
+    const record = {
+      userId: 'p1',
+      memories: [{ text: '带父母去成都，预算中等', tags: ['带父母'] }],
+      insights: { summary: 's', tags: ['慢节奏'] },
+      itineraries: [
+        { ts: '2026-09-10T00:00:00Z', destination: '成都', budget_cny: 3000, days: [{}, {}] },
+        { ts: '2026-11-01T00:00:00Z', destination: '成都市', budget_cny: 4000, days: [{}, {}, {}] },
+      ],
+      turns: [{ role: 'user', text: '你好' }],
+    };
+    const result = stats.computePersonalStats(record);
+    assert.strictEqual(result.tripCount, 2);
+    assert.strictEqual(result.cityCount, 1);
+    assert.strictEqual(result.cities[0].city, '成都');
+    assert.strictEqual(result.cities[0].count, 2);
+    assert.strictEqual(result.cities[0].days, 5);
+    assert.strictEqual(result.totalDays, 5);
+    assert.strictEqual(result.avgBudget, 3500);
+    assert.ok(result.tags.length >= 1);
+  });
+
   console.log('\n冒烟测试：' + passed + ' 通过 / ' + failed + ' 失败');
   if (failed) process.exitCode = 1;
 })();

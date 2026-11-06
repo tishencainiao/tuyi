@@ -150,12 +150,73 @@ function computeStats(records = []) {
   };
 }
 
+function normalizeCity(name) {
+  const value = String(name || '').trim();
+  if (!value) return '';
+  const matched = CITIES.find((city) => value.includes(city));
+  if (matched) return matched;
+  return value.replace(/(省|市|自治区|特别行政区|地区)$/g, '').trim();
+}
+
+function computePersonalStats(record) {
+  const itineraries = Array.isArray(record.itineraries) ? record.itineraries : [];
+  const cityMap = new Map();
+  const tagCount = new Map();
+
+  for (const item of record.memories || []) {
+    for (const tag of item.tags || []) tagCount.set(tag, (tagCount.get(tag) || 0) + 1);
+  }
+  for (const tag of (record.insights && record.insights.tags) || []) {
+    tagCount.set(tag, (tagCount.get(tag) || 0) + 1);
+  }
+
+  for (const itinerary of itineraries) {
+    const city = normalizeCity(itinerary.destination);
+    if (!city) continue;
+    const ts = String(itinerary.ts || '');
+    const days = (itinerary.days || []).length || 0;
+    const entry = cityMap.get(city) || { city, count: 0, days: 0, firstVisit: ts, lastVisit: ts };
+    entry.count += 1;
+    entry.days += days;
+    if (ts && (!entry.firstVisit || ts < entry.firstVisit)) entry.firstVisit = ts;
+    if (ts && (!entry.lastVisit || ts > entry.lastVisit)) entry.lastVisit = ts;
+    cityMap.set(city, entry);
+  }
+
+  const cities = [...cityMap.values()].sort((a, b) => b.count - a.count || a.city.localeCompare(b.city));
+  const budgets = itineraries.map((item) => Number(item.budget_cny) || 0).filter((value) => value > 0);
+  const totalBudget = budgets.reduce((sum, value) => sum + value, 0);
+  const totalDays = itineraries.reduce((sum, item) => sum + ((item.days || []).length || 0), 0);
+
+  return {
+    tripCount: itineraries.length,
+    cityCount: cities.length,
+    totalDays,
+    totalBudget,
+    avgBudget: budgets.length ? Math.round(totalBudget / budgets.length) : 0,
+    cities,
+    tags: toArray(tagCount, 10),
+    memories: (record.memories || []).length,
+    turnsCount: (record.turns || []).length,
+    hasInsights: Boolean(record.insights && record.insights.summary),
+    recentTrips: itineraries.slice(-5).reverse().map((item) => ({
+      ts: item.ts || '',
+      title: item.title || '',
+      destination: item.destination || '',
+      days: (item.days || []).length,
+      budget_cny: Number(item.budget_cny) || 0,
+    })),
+  };
+}
+
 module.exports = {
   DATA_DIR,
   CITIES,
   INTENTS,
   classifyIntent,
   budgetBucket,
-  collectRecords,
+  normalizeCity,
   computeStats,
+  computePersonalStats,
+  collectRecords,
 };

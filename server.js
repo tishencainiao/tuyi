@@ -265,6 +265,11 @@ const server = http.createServer((req, res) => {
   const memoryPath = pathname.match(/^\/api\/memory\/([^/]+)$/);
   if (memoryPath && method === 'PUT') return handleMemoryUpdate(req, res, decodeURIComponent(memoryPath[1]));
   if (memoryPath && method === 'DELETE') return handleMemoryRemove(req, res, decodeURIComponent(memoryPath[1]));
+  if (method === 'GET' && pathname === '/api/stats/personal') {
+    const user = currentUser(req);
+    if (!user) return sendJSON(res, 401, { error: '未登录' });
+    return sendJSON(res, 200, stats.computePersonalStats(memory.load(user.userId)));
+  }
   if (method === 'GET' && pathname === '/api/stats') {
     if (!currentUser(req)) return sendJSON(res, 401, { error: '未登录' });
     return sendJSON(res, 200, stats.computeStats(stats.collectRecords()));

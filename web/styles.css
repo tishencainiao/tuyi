@@ -642,3 +642,55 @@ body {
   color: var(--muted);
   font-size: 12px;
 }
+
+/* 看板页签与数据表 */
+.view-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  background: var(--bg);
+  padding: 4px;
+  border-radius: 10px;
+  width: fit-content;
+}
+
+.view-tab {
+  border: none;
+  background: transparent;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.view-tab.active {
+  background: var(--panel);
+  color: var(--brand);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(31, 36, 48, 0.08);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.data-table th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
