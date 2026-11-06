@@ -52,6 +52,11 @@ copy .env.example .env    # 然后填写 DEEPSEEK_API_KEY（必需）、AMAP_KEY
 node server.js            # 打开 http://127.0.0.1:8787
 node scripts/seed-accounts.js   # 可选：生成测试账号 test1/test2/test3（密码 123456）
 
+# 2.1 一键启动（可选）：在桌面生成快捷方式
+powershell -ExecutionPolicy Bypass -File scripts\install-shortcuts.ps1
+# 之后双击桌面「途忆（启动并打开网页）」：后台起服务 + 等端口就绪 + 自动开浏览器；
+# 「途忆（打开网页）」只开网页；「途忆（停止服务）」停服务。日志在 logs/server.*.log。
+
 # 3. 自检与测试
 node check.js             # 语法 + 配置 + 工具注册
 node test/smoke.js        # 冒烟测试（不联网）
