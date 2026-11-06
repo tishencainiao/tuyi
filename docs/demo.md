@@ -7,7 +7,8 @@
 1. `E:\Learn\tuyi` 下确认 `.env` 已填 `DEEPSEEK_API_KEY` / `AMAP_KEY`；
 2. `node check.js` 全绿（可选：`node test/smoke.js`）；
 3. 可选：`node scripts/seed-demo.js` 让看板有演示数据；
-4. 启动：`node server.js`，浏览器打开 `http://127.0.0.1:8787`。
+4. 启动：`node server.js`，浏览器打开 `http://127.0.0.1:8787`；
+5. 首次会跳转登录页：用测试账号登录（test1 / 123456），也可以现场注册一个新账号。
 
 ## 二、演示流程
 

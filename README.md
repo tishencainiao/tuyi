@@ -30,12 +30,13 @@ tuyi/
 │   ├── tools.js         #   工具注册与分发（自动加载 tools/）
 │   ├── memory.js        #   分层记忆（抽取 / 检索 / 注入）
 │   ├── stats.js         #   偏好统计（标签 / 目的地 / 预算 / 意图）
+│   ├── auth.js          #   本地账号与会话（scrypt + httpOnly cookie）
 │   └── prompts/         #   提示词（persona.md 人设）
 ├── tools/               # 工具实现（plan_trip 校验、高德 POI、天气）
 ├── py/                  # Python：记忆消化（digest.py，里程碑 3 起）
 ├── web/                 # 前端三页
 ├── test/                # 测试（冒烟 + 联网联调）
-├── scripts/             # 辅助脚本（seed-demo.js 生成演示数据）
+├── scripts/             # 辅助脚本（seed-demo / seed-accounts / ablation）
 ├── docs/                # 设计文档（plan.md / development.md）
 └── data/                # 运行时数据（记忆 / 会话，git 忽略）
 ```
@@ -46,13 +47,15 @@ tuyi/
 # 1. 配置密钥
 copy .env.example .env    # 然后填写 DEEPSEEK_API_KEY（必需）、AMAP_KEY（可选）
 
-# 2. 启动
+# 2. 启动（首次打开会跳到登录页）
 node server.js            # 打开 http://127.0.0.1:8787
+node scripts/seed-accounts.js   # 可选：生成测试账号 test1/test2/test3（密码 123456）
 
 # 3. 自检与测试
 node check.js             # 语法 + 配置 + 工具注册
 node test/smoke.js        # 冒烟测试（不联网）
 node test/live.js         # 手动联网联调（需 Key + 网络，会真实调用 DeepSeek 和高德）
+node test/live-auth.js    # 账号 + 历史联调（需服务已启动）
 python py/digest.py --user <用户ID> --force   # 手动触发一次记忆消化
 node scripts/seed-demo.js                     # 生成演示数据（看板 / 个人中心用）
 ```
@@ -64,6 +67,7 @@ node scripts/seed-demo.js                     # 生成演示数据（看板 / �
 3. **个性化记忆**（已完成）：分层记忆 + 记忆消化（Python 轻量版）。
 4. **数据看板**（已完成）：偏好统计（标签 / 目的地 / 预算 / 意图）+ 个人中心（画像 / 记忆 / 行程）。
 5. **收尾**（已完成）：测试、演示数据、论文素材（架构图 / 提示词设计 / 消融实验 / 答辩脚本）。
+6. **账号与多轮会话**（已完成 v1.1.0）：本地账号 + 登录页 + 历史加载。
 
 ## 文档
 
@@ -74,6 +78,7 @@ node scripts/seed-demo.js                     # 生成演示数据（看板 / �
 | [docs/prompt-engineering.md](docs/prompt-engineering.md) | 提示词设计与防幻觉策略（论文第 4 章） |
 | [docs/ablation.md](docs/ablation.md) | 消融实验设计（论文第 5 章） |
 | [docs/demo.md](docs/demo.md) | 答辩演示脚本 |
+| [docs/modification-plan.md](docs/modification-plan.md) | v1.x 修改方案（7 个反馈问题 → 版本计划） |
 | [docs/development.md](docs/development.md) | 开发规范（提交 / 版本 / 测试 / 密钥红线） |
 
 ## 复用说明

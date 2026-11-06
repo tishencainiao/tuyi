@@ -30,6 +30,9 @@ Node 复用 Momo 大脑（流式 DeepSeek + 工具循环）＋ Web 三页（聊�
 3. 个性化：分层记忆 + 记忆消化（Python）（已完成 v0.3.0）
 4. 数据看板：偏好统计 + 个人中心（已完成 v0.4.0）
 5. 收尾：测试、演示数据、论文素材（架构图、消融实验）（已完成 v1.0.0）
+6. 账号与多轮会话：本地账号 + 历史加载（已完成 v1.1.0）
+7. 记忆时序准确与记忆可编辑（v1.2.0，见 docs/modification-plan.md）
+8. 个人看板 + 全国地图点亮（v1.3.0 / v2.0.0）
 
 ## 四、待办
 
@@ -43,3 +46,4 @@ Node 复用 Momo 大脑（流式 DeepSeek + 工具循环）＋ Web 三页（聊�
 - v0.3.0（2026-11-04）：分层记忆（brain/memory.js：对话抽取事实 → 去重入库 → 关键词检索注入）+ 记忆消化（py/digest.py：反思合成偏好标签与一句话认识，下一轮自动注入）；冒烟 13 项全过；两轮联网联调验证「第二轮自动贴合偏好」。
 - v0.4.0（2026-11-04）：偏好统计（brain/stats.js：标签 / 目的地 / 预算 / 意图规则分类）+ 看板页（ECharts 本地化，web/vendor/echarts.min.js）+ 个人中心（画像 / 记忆 / 行程）；新增 /api/stats、/api/profile 与 scripts/seed-demo.js 演示数据；冒烟 16 项全过。
 - v1.0.0（2026-11-04）：收尾——新增 docs/architecture.md、prompt-engineering.md、ablation.md、demo.md；scripts/ablation.js 消融实验助手；agent 支持 TUYI_DISABLE_MEMORY 开关（对照实验用）；README 增加文档索引。
+- v1.1.0（2026-11-06）：本地账号（brain/auth.js：scrypt 哈希 + httpOnly session cookie，data/users.json / data/sessions.json）+ 多轮会话历史（turns 加 conversationId，新增 GET /api/history，agent 把最近 20 轮历史带入上下文）；所有 /api/*（除 health）改为从 session 取 userId；新增登录页与测试账号脚本（scripts/seed-accounts.js）；新增 docs/modification-plan.md。

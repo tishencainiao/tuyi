@@ -215,6 +215,43 @@ const sample = {
     assert.ok(result.intentDistribution.length >= 2);
   });
 
+  await check('账号：注册 / 登录 / 会话 / 密码不落明文', () => {
+    const fs = require('node:fs');
+    const os = require('node:os');
+    const path = require('node:path');
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tuyi-auth-'));
+    process.env.TUYI_DATA_DIR = tmp;
+    try {
+      const auth = require('../brain/auth');
+      const reg = auth.createUser('tester', 'secret123');
+      assert.strictEqual(reg.ok, true);
+      assert.strictEqual(auth.createUser('tester', 'secret123').ok, false);
+      assert.strictEqual(auth.verifyLogin('tester', 'secret123').ok, true);
+      assert.strictEqual(auth.verifyLogin('tester', 'wrong-pass').ok, false);
+      const token = auth.createSession(reg.userId);
+      assert.ok(auth.getSession(token));
+      auth.destroySession(token);
+      assert.strictEqual(auth.getSession(token), null);
+      const users = JSON.parse(fs.readFileSync(path.join(tmp, 'users.json'), 'utf8'));
+      const stored = Object.values(users)[0];
+      assert.ok(stored.hash && stored.hash !== 'secret123');
+      assert.ok(stored.salt && stored.salt.length >= 16);
+    } finally {
+      delete process.env.TUYI_DATA_DIR;
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  await check('记忆：会话历史按 conversationId 区分', () => {
+    const memory = require('../brain/memory');
+    const record = memory.emptyRecord('hist-user');
+    memory.appendTurn(record, 'user', '第一句', 'c1');
+    memory.appendTurn(record, 'assistant', '回复一', 'c1');
+    memory.appendTurn(record, 'user', '第二句', 'c2');
+    assert.strictEqual(record.turns.filter((turn) => turn.conversationId === 'c1').length, 2);
+    assert.strictEqual(record.turns.filter((turn) => turn.conversationId === 'c2').length, 1);
+  });
+
   console.log('\n冒烟测试：' + passed + ' 通过 / ' + failed + ' 失败');
   if (failed) process.exitCode = 1;
 })();

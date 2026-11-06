@@ -17,7 +17,7 @@ const { chatOnce, parseJsonLoose } = require('./llm');
 
 const ROOT = path.join(__dirname, '..');
 const DATA_DIR = process.env.TUYI_DATA_DIR || path.join(ROOT, 'data', 'memory');
-const MAX_TURNS = 40;
+const MAX_TURNS = 120;
 const MAX_MEMORIES = 200;
 const MAX_ITINERARIES = 20;
 
@@ -55,6 +55,9 @@ function load(userId) {
     const raw = fs.readFileSync(userFile(userId), 'utf8');
     const record = JSON.parse(raw);
     record.turns = Array.isArray(record.turns) ? record.turns : [];
+    record.turns.forEach((turn) => {
+      if (!turn.conversationId) turn.conversationId = 'default';
+    });
     record.memories = Array.isArray(record.memories) ? record.memories : [];
     record.itineraries = Array.isArray(record.itineraries) ? record.itineraries : [];
     record.state = record.state || { lastDigestAt: null, memoriesSinceDigest: 0 };
@@ -72,11 +75,23 @@ function save(record) {
   fs.renameSync(tmp, target);
 }
 
-function appendTurn(record, role, text) {
+function appendTurn(record, role, text, conversationId = 'default') {
   const value = String(text || '').trim();
   if (!value) return;
-  record.turns.push({ ts: new Date().toISOString(), role, text: value.slice(0, 2000) });
+  record.turns.push({
+    ts: new Date().toISOString(),
+    role,
+    text: value.slice(0, 2000),
+    conversationId: String(conversationId || 'default'),
+  });
   if (record.turns.length > MAX_TURNS) record.turns = record.turns.slice(-MAX_TURNS);
+}
+
+function getHistory(userId, conversationId = 'default', limit = 40) {
+  const record = load(userId);
+  return record.turns
+    .filter((turn) => String(turn.conversationId || 'default') === String(conversationId))
+    .slice(-Math.max(1, Number(limit) || 40));
 }
 
 function normalizeFact(text) {
@@ -229,10 +244,10 @@ async function extractFacts({ cfg, userText, assistantText }) {
     }));
 }
 
-async function rememberTurn({ cfg, userId, userText, assistantText, itinerary }) {
+async function rememberTurn({ cfg, userId, userText, assistantText, itinerary, conversationId = 'default' }) {
   const record = load(userId);
-  appendTurn(record, 'user', userText);
-  if (assistantText) appendTurn(record, 'assistant', assistantText);
+  appendTurn(record, 'user', userText, conversationId);
+  if (assistantText) appendTurn(record, 'assistant', assistantText, conversationId);
   if (itinerary) appendItinerary(record, itinerary);
   try {
     const facts = await extractFacts({ cfg, userText, assistantText });
@@ -257,6 +272,7 @@ module.exports = {
   load,
   save,
   appendTurn,
+  getHistory,
   addFacts,
   appendItinerary,
   bigrams,

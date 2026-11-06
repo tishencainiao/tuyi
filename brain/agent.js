@@ -31,7 +31,7 @@ async function rememberSafely(args) {
   }
 }
 
-async function* runAgent({ cfg, userId, userText }) {
+async function* runAgent({ cfg, userId, userText, conversationId = 'default' }) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   const llmCfg = cfg.llm || {};
   const maxSteps = Math.max(1, Number(llmCfg.max_agent_steps) || 6);
@@ -43,8 +43,16 @@ async function* runAgent({ cfg, userId, userText }) {
     console.error('[memory-block]\n' + memoryBlock);
   }
 
+  const history = memoryEnabled
+    ? memory.getHistory(userId, conversationId, 20).map((turn) => ({
+        role: turn.role === 'user' ? 'user' : 'assistant',
+        content: String(turn.text || '').slice(0, 1200),
+      }))
+    : [];
+
   const messages = [
     { role: 'system', content: loadPrompt('persona.md') + (memoryBlock ? '\n\n' + memoryBlock : '') },
+    ...history,
     { role: 'user', content: userText },
   ];
   let finalText = '';
@@ -73,7 +81,7 @@ async function* runAgent({ cfg, userId, userText }) {
 
     if (toolCalls.length === 0) {
       if (memoryEnabled) {
-        await rememberSafely({ cfg, userId, userText, assistantText: finalText, itinerary: lastItinerary });
+        await rememberSafely({ cfg, userId, userText, assistantText: finalText, itinerary: lastItinerary, conversationId });
       }
       yield { type: 'done', steps: step };
       return;
@@ -113,7 +121,7 @@ async function* runAgent({ cfg, userId, userText }) {
   }
 
   if (memoryEnabled) {
-    await rememberSafely({ cfg, userId, userText, assistantText: finalText, itinerary: lastItinerary });
+    await rememberSafely({ cfg, userId, userText, assistantText: finalText, itinerary: lastItinerary, conversationId });
   }
   yield { type: 'done', steps: maxSteps, note: '达到最大步数，已停止工具循环' };
 }

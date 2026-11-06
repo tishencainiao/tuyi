@@ -34,6 +34,7 @@ commit message 用「类型: 说明」格式：
 ## 四、密钥红线
 
 - 真实 Key 只放 `.env`（已 gitignore，不进版本库）；`.env.example` 只放空值；
+- 账号与会话存在 `data/users.json` / `data/sessions.json`（同样在 `data/` 下，不进版本库）；
 - 本地已装 pre-commit 钩子：提交时自动拦截 `.env` / `.env.*` / `data/` 与 `sk-` 样式串，并顺带跑 check.js；
 - 换机器 / 重新 clone 后钩子需要重装（`.git/hooks/pre-commit` 不进版本库）。
 

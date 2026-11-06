@@ -90,6 +90,10 @@
 
   fetch('/api/stats')
     .then(function (resp) {
+      if (resp.status === 401) {
+        location.href = '/login.html';
+        throw new Error('未登录');
+      }
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       return resp.json();
     })

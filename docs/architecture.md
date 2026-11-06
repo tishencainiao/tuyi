@@ -45,7 +45,8 @@ graph TB
 
 | 模块 | 职责 | 论文对应 |
 |---|---|---|
-| `server.js` | HTTP 服务、静态页、SSE 流式、看板 / 个人中心接口 | 系统实现 |
+| `server.js` | HTTP 服务、鉴权、静态页、SSE 流式、看板 / 个人中心接口 | 系统实现 |
+| `brain/auth.js` | 本地账号（scrypt 哈希）与会话（httpOnly cookie） | 系统实现 / 安全 |
 | `brain/agent.js` | ReAct 主循环（≤6 步）：思考 → 工具 → 回喂 → 收尾；开轮回填记忆、收尾写记忆 | 系统架构 / 提示工程 |
 | `brain/llm.js` | DeepSeek 流式与非流式客户端、工具调用解析、JSON 容错解析 | 系统实现 |
 | `brain/memory.js` | 分层记忆：对话轮次、事实抽取、去重、检索注入、消化触发 | 创新点（记忆消化） |
@@ -56,7 +57,7 @@ graph TB
 
 ## 三、一次对话的数据流
 
-1. 前端 `POST /api/chat`（SSE）。
+1. 前端 `POST /api/chat`（SSE，需登录，userId 取自 session）。
 2. `runAgent` 读取用户记忆，把「偏好标签 + 相关历史」拼进 system 提示。
 3. 模型流式输出；若发起 `tool_calls`，后端执行工具并把结果作为 `role:tool` 回喂。
 4. 行程生成后调用 `plan_trip` 校验，通过则向前端发 `itinerary` 事件，页面渲染卡片。

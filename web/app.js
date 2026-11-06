@@ -7,16 +7,15 @@
   const sendBtn = document.getElementById('send');
   const hintEl = document.getElementById('hint');
   const chipsEl = document.getElementById('chips');
+  const topbarEl = document.querySelector('.topbar');
+  const conversationId = 'default';
 
   let busy = false;
+  let me = null;
 
-  const userId = (function () {
-    const saved = localStorage.getItem('trip-user-id');
-    if (saved) return saved;
-    const id = 'u-' + Math.random().toString(36).slice(2, 10);
-    localStorage.setItem('trip-user-id', id);
-    return id;
-  })();
+  function redirectLogin() {
+    location.href = '/login.html';
+  }
 
   function scrollToBottom() {
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -140,6 +139,24 @@
     scrollToBottom();
   }
 
+  async function loadHistory() {
+    const resp = await fetch('/api/history?conversationId=' + encodeURIComponent(conversationId));
+    if (resp.status === 401) {
+      redirectLogin();
+      return;
+    }
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const turns = data.turns || [];
+    if (!turns.length) return;
+    messagesEl.innerHTML = '';
+    turns.forEach(function (turn) {
+      addMessage(turn.role === 'user' ? 'user' : 'bot', turn.text);
+    });
+    if (chipsEl) messagesEl.appendChild(chipsEl);
+    scrollToBottom();
+  }
+
   async function send(text) {
     addMessage('user', text);
     const bubble = addMessage('bot', '思考中…');
@@ -150,8 +167,12 @@
       const resp = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: userId, message: text }),
+        body: JSON.stringify({ message: text, conversationId: conversationId }),
       });
+      if (resp.status === 401) {
+        redirectLogin();
+        return;
+      }
       if (!resp.ok || !resp.body) {
         const detail = await resp.text().catch(function () {
           return '';
@@ -199,6 +220,29 @@
     send(value);
   }
 
+  function renderUserBox() {
+    if (!me || !topbarEl) return;
+    const box = document.createElement('div');
+    box.className = 'user-box';
+    const name = document.createElement('span');
+    name.textContent = me.username;
+    const out = document.createElement('button');
+    out.type = 'button';
+    out.className = 'link-btn';
+    out.textContent = '退出';
+    out.addEventListener('click', async function () {
+      try {
+        await fetch('/api/logout', { method: 'POST' });
+      } catch (err) {
+        /* 忽略 */
+      }
+      location.href = '/login.html';
+    });
+    box.appendChild(name);
+    box.appendChild(out);
+    topbarEl.appendChild(box);
+  }
+
   form.addEventListener('submit', function (event) {
     event.preventDefault();
     submitText(input.value);
@@ -218,5 +262,17 @@
     });
   }
 
-  input.focus();
+  (async function init() {
+    try {
+      const resp = await fetch('/api/me');
+      if (!resp.ok) return redirectLogin();
+      const data = await resp.json();
+      me = data.user;
+    } catch (err) {
+      return redirectLogin();
+    }
+    renderUserBox();
+    await loadHistory().catch(function () {});
+    input.focus();
+  })();
 })();

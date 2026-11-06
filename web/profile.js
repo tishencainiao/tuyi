@@ -1,11 +1,13 @@
 (function () {
   'use strict';
 
-  const inputEl = document.getElementById('uid');
-  const loadBtn = document.getElementById('load');
+  const whoEl = document.getElementById('who');
+  const logoutBtn = document.getElementById('logout');
   const bodyEl = document.getElementById('profile-body');
 
-  inputEl.value = localStorage.getItem('trip-user-id') || 'live-test';
+  function redirectLogin() {
+    location.href = '/login.html';
+  }
 
   function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -50,7 +52,9 @@
         insight.appendChild(el('p', 'muted', '更新时间：' + new Date(data.insights.updated).toLocaleString()));
       }
     } else {
-      insight.appendChild(el('p', 'empty', '还没有消化结果：多聊几轮，或运行 python py/digest.py --user ' + data.userId + ' --force。'));
+      insight.appendChild(
+        el('p', 'empty', '还没有消化结果：多聊几轮，或运行 python py/digest.py --user ' + data.userId + ' --force。'),
+      );
     }
     bodyEl.appendChild(insight);
 
@@ -60,8 +64,7 @@
       data.memories.forEach(function (item) {
         const li = el('li', 'memory-item');
         li.appendChild(el('div', null, item.text));
-        const meta = el('div', 'meta', (item.tags || []).join(' · '));
-        li.appendChild(meta);
+        li.appendChild(el('div', 'meta', (item.tags || []).join(' · ')));
         list.appendChild(li);
       });
       memories.appendChild(list);
@@ -76,7 +79,7 @@
       data.itineraries.forEach(function (trip) {
         const li = el('li', 'trip-item');
         const left = el('div');
-        left.appendChild(el('strong', null, trip.title || (trip.destination + '行程')));
+        left.appendChild(el('strong', null, trip.title || trip.destination + '行程'));
         left.appendChild(
           el(
             'div',
@@ -96,32 +99,38 @@
   }
 
   function load() {
-    const userId = inputEl.value.trim();
-    if (!userId) {
-      renderEmpty('请输入用户 ID。');
-      return;
-    }
-    loadBtn.disabled = true;
-    fetch('/api/profile?userId=' + encodeURIComponent(userId))
+    fetch('/api/me')
       .then(function (resp) {
+        if (!resp.ok) throw new Error('未登录');
+        return resp.json();
+      })
+      .then(function (data) {
+        if (whoEl) whoEl.textContent = data.user.username;
+        return fetch('/api/profile');
+      })
+      .then(function (resp) {
+        if (resp.status === 401) return redirectLogin();
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         return resp.json();
       })
       .then(function (data) {
-        render(data);
+        if (data) render(data);
       })
       .catch(function (err) {
         renderEmpty('加载失败：' + err.message);
-      })
-      .finally(function () {
-        loadBtn.disabled = false;
       });
   }
 
-  loadBtn.addEventListener('click', load);
-  inputEl.addEventListener('keydown', function (event) {
-    if (event.key === 'Enter') load();
-  });
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async function () {
+      try {
+        await fetch('/api/logout', { method: 'POST' });
+      } catch (err) {
+        /* 忽略 */
+      }
+      location.href = '/login.html';
+    });
+  }
 
-  if (inputEl.value) load();
+  load();
 })();
