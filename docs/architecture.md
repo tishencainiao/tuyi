@@ -51,7 +51,7 @@ graph TB
 | `brain/llm.js` | DeepSeek 流式与非流式客户端、工具调用解析、JSON 容错解析 | 系统实现 |
 | `brain/memory.js` | 分层记忆：对话轮次、事实抽取、去重、检索注入、消化触发 | 创新点（记忆消化） |
 | `brain/stats.js` | 偏好统计：标签 / 目的地 / 预算 / 意图规则分类 | 大数据元素 |
-| `tools/` | 高德 POI、天气、`plan_trip` 结构化校验（自动注册） | 数据接入 / 防幻觉 |
+| `tools/` | 高德 POI、天气、`plan_trip` 结构化校验、`memory_edit` 记忆编辑（自动注册） | 数据接入 / 防幻觉 / 记忆可干预 |
 | `py/digest.py` | 记忆消化：把零散事实反思合成为偏好标签 + 一句话认识 | 创新点 |
 | `web/` | 三页前端（原生 HTML/CSS/JS + ECharts 本地化） | 系统功能与可视化 |
 

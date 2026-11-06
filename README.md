@@ -32,7 +32,7 @@ tuyi/
 │   ├── stats.js         #   偏好统计（标签 / 目的地 / 预算 / 意图）
 │   ├── auth.js          #   本地账号与会话（scrypt + httpOnly cookie）
 │   └── prompts/         #   提示词（persona.md 人设）
-├── tools/               # 工具实现（plan_trip 校验、高德 POI、天气）
+├── tools/               # 工具实现（plan_trip 校验、高德 POI、天气、memory_edit）
 ├── py/                  # Python：记忆消化（digest.py，里程碑 3 起）
 ├── web/                 # 前端三页
 ├── test/                # 测试（冒烟 + 联网联调）
@@ -56,6 +56,8 @@ node check.js             # 语法 + 配置 + 工具注册
 node test/smoke.js        # 冒烟测试（不联网）
 node test/live.js         # 手动联网联调（需 Key + 网络，会真实调用 DeepSeek 和高德）
 node test/live-auth.js    # 账号 + 历史联调（需服务已启动）
+node test/live-timeline.js    # 时序联调：第一次 / 第二次（需 Key）
+node test/live-memory-edit.js # 对话式记忆编辑联调（需服务已启动）
 python py/digest.py --user <用户ID> --force   # 手动触发一次记忆消化
 node scripts/seed-demo.js                     # 生成演示数据（看板 / 个人中心用）
 ```
@@ -68,6 +70,7 @@ node scripts/seed-demo.js                     # 生成演示数据（看板 / �
 4. **数据看板**（已完成）：偏好统计（标签 / 目的地 / 预算 / 意图）+ 个人中心（画像 / 记忆 / 行程）。
 5. **收尾**（已完成）：测试、演示数据、论文素材（架构图 / 提示词设计 / 消融实验 / 答辩脚本）。
 6. **账号与多轮会话**（已完成 v1.1.0）：本地账号 + 登录页 + 历史加载。
+7. **记忆时序与可编辑**（已完成 v1.2.0）：行程时间线注入（第一次 / 第 N 次）+ 对话式记忆增改删。
 
 ## 文档
 

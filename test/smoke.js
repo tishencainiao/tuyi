@@ -252,6 +252,58 @@ const sample = {
     assert.strictEqual(record.turns.filter((turn) => turn.conversationId === 'c2').length, 1);
   });
 
+  await check('记忆：行程时间线注入（第一次 / 第 N 次）', () => {
+    const memory = require('../brain/memory');
+    const record = memory.emptyRecord('tl-user');
+    record.itineraries.push(
+      { ts: '2026-10-01T00:00:00Z', destination: '成都', days: [{}, {}], budget_cny: 3000 },
+      { ts: '2026-11-01T00:00:00Z', destination: '西安', days: [{}], budget_cny: 1500 },
+    );
+    const block = memory.renderBlock(record, '我第一次去哪了');
+    assert.match(block, /行程时间线/);
+    assert.match(block, /第 1 次：2026-10-01 · 成都/);
+    assert.match(block, /第 2 次：2026-11-01 · 西安/);
+  });
+
+  await check('记忆：手动改 / 删 / 按内容定位', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const memory = require('../brain/memory');
+    const userId = 'smoke-edit';
+    const record = memory.emptyRecord(userId);
+    memory.addFacts(record, [{ text: '我不吃辣', tags: ['忌口'] }]);
+    memory.save(record);
+    try {
+      const id = memory.load(userId).memories[0].id;
+      assert.strictEqual(memory.updateMemory(userId, id, { text: '我能吃微辣' }).ok, true);
+      assert.strictEqual(memory.load(userId).memories[0].text, '我能吃微辣');
+      assert.strictEqual(memory.findMemories(userId, '微辣').length, 1);
+      assert.strictEqual(memory.removeMemory(userId, id).ok, true);
+      assert.strictEqual(memory.load(userId).memories.length, 0);
+    } finally {
+      fs.rmSync(path.join(memory.DATA_DIR, userId + '.json'), { force: true });
+    }
+  });
+
+  await check('工具：memory_edit 带用户上下文（只改自己）', async () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const memory = require('../brain/memory');
+    const userId = 'smoke-tool-edit';
+    try {
+      const add = await tools.dispatch('memory_edit', { action: 'add', text: '我喜欢海边', tags: ['海岛'] }, { userId });
+      assert.strictEqual(add.ok, true);
+      assert.strictEqual(memory.load(userId).memories.length, 1);
+      const removed = await tools.dispatch('memory_edit', { action: 'remove', match: '海边' }, { userId });
+      assert.strictEqual(removed.ok, true);
+      assert.strictEqual(memory.load(userId).memories.length, 0);
+      const noCtx = await tools.dispatch('memory_edit', { action: 'add', text: '没有上下文' });
+      assert.strictEqual(noCtx.ok, false);
+    } finally {
+      fs.rmSync(path.join(memory.DATA_DIR, userId + '.json'), { force: true });
+    }
+  });
+
   console.log('\n冒烟测试：' + passed + ' 通过 / ' + failed + ' 失败');
   if (failed) process.exitCode = 1;
 })();

@@ -21,7 +21,7 @@ function defs() {
   return [...registry.values()].map((item) => item.def);
 }
 
-async function dispatch(name, args) {
+async function dispatch(name, args, context = {}) {
   const item = registry.get(name);
   if (!item) throw new Error('未知工具：' + name);
   let parsed = args;
@@ -32,7 +32,7 @@ async function dispatch(name, args) {
       throw new Error('工具 ' + name + ' 的参数不是合法 JSON');
     }
   }
-  return await item.run(parsed || {});
+  return await item.run(parsed || {}, context);
 }
 
 for (const file of fs.readdirSync(TOOLS_DIR)) {

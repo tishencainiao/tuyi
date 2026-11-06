@@ -10,13 +10,14 @@
 | `brain/prompts/memory-extract.md` | 每轮从对话抽取「关于用户的事实」 | 只输出 JSON；只抽用户说的；不超过 4 条；不要寒暄 |
 | `py/digest.py` 内 `DIGEST_PROMPT` | 把多条事实反思合成为偏好标签 + 一句话认识 | 只输出 JSON；3~6 个短标签；摘要 ≤60 字 |
 | `tools/plan-trip.js` 的 `def.parameters` | 行程 JSON 的 schema 约束（时间 / 地点 / 活动 / 交通 / 花费） | 固定字段名与格式，模型必须按 schema 输出 |
+| `tools/memory-edit.js` 的 `def` | 让用户通过对话增 / 改 / 删自己的记忆（`add` / `update` / `remove`） | 只操作当前登录用户的记忆；优先用 id，没有 id 用 `match` 片段；删多条按片段全删 |
 
 ## 二、提示词注入结构
 
 ```
 system =
   persona.md（人设 + 规矩 + 工具使用）
-  + 【用户记忆】偏好标签 / 关于用户的认识 / 相关历史记忆（若有）
+  + 【用户记忆】偏好标签 / 关于用户的认识 / 【行程时间线】第 1 次… · 目的地 · 天数 · 预算 / 相关历史记忆（若有）
 user = 本轮用户输入
 ```
 
@@ -28,6 +29,7 @@ user = 本轮用户输入
 |---|---|---|
 | 数据约束 | 排行程前先查高德 POI / 天气，景点名必须来自查询结果 | `persona.md` + `tools/amap-poi.js` + `tools/amap-weather.js` |
 | 结构化约束 | 行程必须落成固定 JSON，校验时间/地点/活动/顺序 | `tools/plan-trip.js` |
+| 时序约束 | 注入「第 1 次 / 第 2 次…」行程时间线，人设要求序数指代先复述再回答 | `brain/memory.js`（renderBlock）+ `persona.md` |
 | 失败降级 | 工具返回 `ok:false` 时明确告诉用户「实时数据没查到」，不硬编 | `persona.md` + 工具返回值 |
 | 检索增强 | 历史记忆 / 偏好注入，减少「忘掉用户」导致的重复与冲突 | `brain/memory.js` |
 | 消融验证 | 有/无记忆消化、有/无工具校验对比 | `scripts/ablation.js` + `docs/ablation.md` |

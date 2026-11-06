@@ -461,6 +461,24 @@ body {
   gap: 10px;
 }
 
+.memory-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.memory-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.memory-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .empty {
   color: var(--muted);
   font-size: 13px;

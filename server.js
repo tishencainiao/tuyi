@@ -208,6 +208,36 @@ function handleProfile(url, req, res) {
   });
 }
 
+async function handleMemoryCreate(req, res) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const body = await readJsonBody(req);
+  if (!body) return sendJSON(res, 400, { error: '请求体不是合法 JSON' });
+  const text = String(body.text || '').trim();
+  if (text.length < 2) return sendJSON(res, 400, { error: '内容太短' });
+  const result = memory.addMemory(user.userId, text, Array.isArray(body.tags) ? body.tags : []);
+  if (!result.ok) return sendJSON(res, 400, { error: result.error });
+  return sendJSON(res, 200, { ok: true });
+}
+
+async function handleMemoryUpdate(req, res, id) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const body = await readJsonBody(req);
+  if (!body) return sendJSON(res, 400, { error: '请求体不是合法 JSON' });
+  const result = memory.updateMemory(user.userId, id, body);
+  if (!result.ok) return sendJSON(res, 400, { error: result.error });
+  return sendJSON(res, 200, { ok: true, memory: result.memory });
+}
+
+function handleMemoryRemove(req, res, id) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const result = memory.removeMemory(user.userId, id);
+  if (!result.ok) return sendJSON(res, 400, { error: result.error });
+  return sendJSON(res, 200, { ok: true });
+}
+
 function health() {
   return {
     ok: true,
@@ -231,6 +261,10 @@ const server = http.createServer((req, res) => {
   if (method === 'POST' && pathname === '/api/chat') return handleChat(req, res);
   if (method === 'GET' && pathname === '/api/history') return handleHistory(url, req, res);
   if (method === 'GET' && pathname === '/api/profile') return handleProfile(url, req, res);
+  if (method === 'POST' && pathname === '/api/memory') return handleMemoryCreate(req, res);
+  const memoryPath = pathname.match(/^\/api\/memory\/([^/]+)$/);
+  if (memoryPath && method === 'PUT') return handleMemoryUpdate(req, res, decodeURIComponent(memoryPath[1]));
+  if (memoryPath && method === 'DELETE') return handleMemoryRemove(req, res, decodeURIComponent(memoryPath[1]));
   if (method === 'GET' && pathname === '/api/stats') {
     if (!currentUser(req)) return sendJSON(res, 401, { error: '未登录' });
     return sendJSON(res, 200, stats.computeStats(stats.collectRecords()));

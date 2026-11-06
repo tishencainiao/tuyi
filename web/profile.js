@@ -59,12 +59,31 @@
     bodyEl.appendChild(insight);
 
     const memories = panel('记忆条目');
+    const memoryBar = el('div', 'memory-bar');
+    const addBtn = el('button', 'link-btn', '＋ 添加一条');
+    addBtn.addEventListener('click', addMemory);
+    memoryBar.appendChild(addBtn);
+    memories.appendChild(memoryBar);
     if ((data.memories || []).length) {
       const list = el('ul', 'memory-list');
       data.memories.forEach(function (item) {
         const li = el('li', 'memory-item');
         li.appendChild(el('div', null, item.text));
-        li.appendChild(el('div', 'meta', (item.tags || []).join(' · ')));
+        const bottom = el('div', 'memory-bottom');
+        bottom.appendChild(el('div', 'meta', (item.tags || []).join(' · ')));
+        const actions = el('div', 'memory-actions');
+        const editBtn = el('button', 'link-btn', '改');
+        editBtn.addEventListener('click', function () {
+          editMemory(item);
+        });
+        const delBtn = el('button', 'link-btn', '删');
+        delBtn.addEventListener('click', function () {
+          removeMemory(item);
+        });
+        actions.appendChild(editBtn);
+        actions.appendChild(delBtn);
+        bottom.appendChild(actions);
+        li.appendChild(bottom);
         list.appendChild(li);
       });
       memories.appendChild(list);
@@ -96,6 +115,39 @@
       trips.appendChild(el('p', 'empty', '还没有生成过行程。'));
     }
     bodyEl.appendChild(trips);
+  }
+
+  async function editMemory(item) {
+    const next = window.prompt('修改这条记忆（留空取消）', item.text);
+    if (!next) return;
+    const text = next.trim();
+    if (!text || text === item.text) return;
+    const resp = await fetch('/api/memory/' + encodeURIComponent(item.id), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text }),
+    });
+    if (!resp.ok) return window.alert('修改失败');
+    load();
+  }
+
+  async function removeMemory(item) {
+    if (!window.confirm('删除这条记忆？\n' + item.text)) return;
+    const resp = await fetch('/api/memory/' + encodeURIComponent(item.id), { method: 'DELETE' });
+    if (!resp.ok) return window.alert('删除失败');
+    load();
+  }
+
+  async function addMemory() {
+    const text = window.prompt('添加一条关于你的记忆（例如：我不吃辣）', '');
+    if (!text || !text.trim()) return;
+    const resp = await fetch('/api/memory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text.trim() }),
+    });
+    if (!resp.ok) return window.alert('添加失败');
+    load();
   }
 
   function load() {

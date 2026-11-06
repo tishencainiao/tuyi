@@ -107,7 +107,7 @@ async function* runAgent({ cfg, userId, userText, conversationId = 'default' }) 
       yield { type: 'tool_start', name: call.name };
       let result;
       try {
-        result = await tools.dispatch(call.name, call.arguments);
+        result = await tools.dispatch(call.name, call.arguments, { userId, conversationId });
       } catch (err) {
         result = { ok: false, error: err && err.message ? err.message : String(err) };
       }

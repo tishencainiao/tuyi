@@ -100,6 +100,15 @@ function normalizeFact(text) {
     .toLowerCase();
 }
 
+function similarText(a, b) {
+  const left = bigrams(a);
+  const right = bigrams(b);
+  if (!left.size || !right.size) return false;
+  let overlap = 0;
+  for (const gram of left) if (right.has(gram)) overlap += 1;
+  return overlap / Math.min(left.size, right.size) >= 0.8;
+}
+
 function addFacts(record, facts) {
   if (!Array.isArray(facts) || !facts.length) return 0;
   const existing = new Set(record.memories.map((memory) => normalizeFact(memory.text)));
@@ -108,6 +117,7 @@ function addFacts(record, facts) {
     const text = String((fact && fact.text) || '').trim();
     const key = normalizeFact(text);
     if (!key || key.length < 2 || existing.has(key)) continue;
+    if (record.memories.some((memory) => similarText(memory.text, text))) continue;
     existing.add(key);
     record.memories.push({
       id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -137,6 +147,50 @@ function appendItinerary(record, itinerary) {
     record.itineraries = record.itineraries.slice(-MAX_ITINERARIES);
   }
   return true;
+}
+
+function findMemories(userId, text) {
+  const record = load(userId);
+  const key = normalizeFact(text);
+  if (!key) return [];
+  return record.memories.filter((memory) => {
+    const value = normalizeFact(memory.text);
+    return value.includes(key) || key.includes(value);
+  });
+}
+
+function addMemory(userId, text, tags) {
+  const record = load(userId);
+  const added = addFacts(record, [{ text, tags: Array.isArray(tags) ? tags : [] }]);
+  if (!added) return { ok: false, error: '内容为空、太短或已存在' };
+  save(record);
+  return { ok: true };
+}
+
+function updateMemory(userId, id, patch = {}) {
+  const record = load(userId);
+  const item = record.memories.find((memory) => memory.id === id);
+  if (!item) return { ok: false, error: '找不到这条记忆' };
+  if (patch.text !== undefined) {
+    const text = String(patch.text || '').trim();
+    if (text.length < 2) return { ok: false, error: '记忆内容太短' };
+    item.text = text.slice(0, 200);
+  }
+  if (Array.isArray(patch.tags)) {
+    item.tags = patch.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 4);
+  }
+  item.updated = new Date().toISOString();
+  save(record);
+  return { ok: true, memory: item };
+}
+
+function removeMemory(userId, id) {
+  const record = load(userId);
+  const index = record.memories.findIndex((memory) => memory.id === id);
+  if (index < 0) return { ok: false, error: '找不到这条记忆' };
+  const [removed] = record.memories.splice(index, 1);
+  save(record);
+  return { ok: true, removed };
 }
 
 function bigrams(text) {
@@ -174,6 +228,21 @@ function renderBlock(record, userText, memoryCfg = {}) {
   }
   if (insights && insights.summary) {
     lines.push('关于这位用户的认识：' + insights.summary);
+  }
+  const itineraries = Array.isArray(record.itineraries) ? record.itineraries : [];
+  if (itineraries.length) {
+    const sorted = [...itineraries].sort((a, b) => String(a.ts || '').localeCompare(String(b.ts || '')));
+    const kept = sorted.slice(-8);
+    const base = sorted.length - kept.length;
+    lines.push('【行程时间线】（按时间先后排序，回答「第一次 / 上次 / 最近一次」时以此为准）');
+    kept.forEach((itinerary, index) => {
+      const date = itinerary.ts ? String(itinerary.ts).slice(0, 10) : '日期未知';
+      lines.push(
+        '第 ' + (base + index + 1) + ' 次：' + date + ' · ' + itinerary.destination +
+          ' · ' + (itinerary.days || []).length + ' 天' +
+          (itinerary.budget_cny ? ' · 预算约 ¥' + itinerary.budget_cny : ''),
+      );
+    });
   }
   const related = retrieve(record, userText, memoryCfg.max_inject_memories || 5);
   if (related.length) {
@@ -275,6 +344,10 @@ module.exports = {
   getHistory,
   addFacts,
   appendItinerary,
+  findMemories,
+  addMemory,
+  updateMemory,
+  removeMemory,
   bigrams,
   retrieve,
   renderBlock,
