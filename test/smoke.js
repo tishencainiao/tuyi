@@ -327,6 +327,23 @@ const sample = {
     assert.ok(result.tags.length >= 1);
   });
 
+  await check('记忆：手动标记去过（增 / 删 / 去重）', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const memory = require('../brain/memory');
+    const userId = 'smoke-visit';
+    try {
+      assert.strictEqual(memory.addVisit(userId, '成都市', 'city').ok, true);
+      assert.strictEqual(memory.addVisit(userId, '成都市', 'city').existed, true);
+      assert.strictEqual(memory.listVisits(userId).length, 1);
+      assert.strictEqual(memory.listVisits(userId)[0].level, 'city');
+      assert.strictEqual(memory.removeVisit(userId, '成都市', 'city').removed, 1);
+      assert.strictEqual(memory.listVisits(userId).length, 0);
+    } finally {
+      fs.rmSync(path.join(memory.DATA_DIR, userId + '.json'), { force: true });
+    }
+  });
+
   console.log('\n冒烟测试：' + passed + ' 通过 / ' + failed + ' 失败');
   if (failed) process.exitCode = 1;
 })();

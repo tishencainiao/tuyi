@@ -8,6 +8,12 @@
   const tabsEl = document.getElementById('view-tabs');
   const palette = ['#2563eb', '#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#14b8a6', '#8b5cf6'];
   let globalLoaded = false;
+  let geoProvinces = null;
+  let geoCities = null;
+  let mapChart = null;
+  let mapLevel = 'province';
+  let personalCities = [];
+  let manualVisits = [];
 
   function fmt(value) {
     return String(value == null ? 0 : value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -129,6 +135,7 @@
   }
 
   function renderPersonal(data) {
+    personalCities = data.cities || [];
     renderKpis(personalKpisEl, [
       ['去过城市', data.cityCount || 0],
       ['旅行次数', data.tripCount || 0],
@@ -144,6 +151,12 @@
     } else {
       personalHintEl.textContent = '统计口径：按行程生成记录汇总（城市按目的地归一化）；重复去同一城市会计入次数。';
     }
+    bindMapControls();
+    loadGeo()
+      .then(refreshManualVisits)
+      .catch(function (err) {
+        personalHintEl.textContent = '地图加载失败：' + err.message;
+      });
   }
 
   function renderGlobal(data) {
@@ -162,6 +175,192 @@
     barChart('chart-cities', data.cityDistribution, '#7c3aed');
     donutChart('chart-budget', data.budgetDistribution || []);
     donutChart('chart-intent', data.intentDistribution || []);
+  }
+
+  function normName(name) {
+    return String(name || '')
+      .replace(/(省|市|自治区|特别行政区|自治州|地区|盟)$/g, '')
+      .trim();
+  }
+
+  function loadGeo() {
+    if (geoProvinces && geoCities) return Promise.resolve();
+    return Promise.all([
+      fetch('/vendor/geo/china-provinces.json').then(function (resp) { return resp.json(); }),
+      fetch('/vendor/geo/china-cities.json').then(function (resp) { return resp.json(); }),
+    ]).then(function (results) {
+      geoProvinces = results[0];
+      geoCities = results[1];
+      if (window.echarts) {
+        window.echarts.registerMap('china-provinces', geoProvinces);
+        window.echarts.registerMap('china-cities', geoCities);
+      }
+    });
+  }
+
+  function cityFeatureIndex() {
+    const index = new Map();
+    (geoCities.features || []).forEach(function (feature) {
+      const name = normName(feature.properties && feature.properties.name);
+      if (name && !index.has(name)) index.set(name, feature);
+    });
+    return index;
+  }
+
+  function provinceValues() {
+    const values = new Map();
+    const cityIndex = cityFeatureIndex();
+    personalCities.forEach(function (item) {
+      const cityName = normName(item.city);
+      const feature = cityIndex.get(cityName);
+      let provinceName = feature ? feature.properties.province : null;
+      if (!provinceName) {
+        const province = (geoProvinces.features || []).find(function (node) {
+          return normName(node.properties.name) === cityName;
+        });
+        provinceName = province ? province.properties.name : null;
+      }
+      if (provinceName) values.set(provinceName, (values.get(provinceName) || 0) + item.count);
+    });
+    manualVisits.forEach(function (item) {
+      if (item.level === 'province') values.set(item.name, (values.get(item.name) || 0) + 1);
+    });
+    return values;
+  }
+
+  function cityValues() {
+    const values = new Map();
+    (geoCities.features || []).forEach(function (feature) {
+      const featureName = feature.properties && feature.properties.name;
+      const normalized = normName(featureName);
+      const auto = personalCities.find(function (item) {
+        return normName(item.city) === normalized;
+      });
+      let count = auto ? auto.count : 0;
+      manualVisits.forEach(function (item) {
+        if (item.level === 'city' && item.name === featureName) count += 1;
+      });
+      if (count) values.set(featureName, count);
+    });
+    return values;
+  }
+
+  function renderVisitChips() {
+    const wrap = document.getElementById('visit-chips');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    if (!manualVisits.length) {
+      wrap.appendChild(el('span', 'muted', '还没有手动标记。'));
+      return;
+    }
+    manualVisits.forEach(function (item) {
+      const chip = el('span', 'visit-chip');
+      chip.appendChild(el('span', null, item.name + (item.level === 'province' ? '（省）' : '（市）')));
+      const btn = el('button', 'link-btn', '×');
+      btn.addEventListener('click', function () {
+        toggleVisit(item.name, item.level);
+      });
+      chip.appendChild(btn);
+      wrap.appendChild(chip);
+    });
+  }
+
+  function renderMap() {
+    const container = document.getElementById('travel-map');
+    if (!container || !window.echarts || !geoProvinces) return;
+    if (!mapChart) mapChart = window.echarts.init(container);
+    if (!mapChart.__bound) {
+      mapChart.on('click', function (params) {
+        toggleVisit(params.name, mapLevel === 'province' ? 'province' : 'city');
+      });
+      mapChart.__bound = true;
+    }
+    const provinceMode = mapLevel === 'province';
+    const features = (provinceMode ? geoProvinces : geoCities).features || [];
+    const values = provinceMode ? provinceValues() : cityValues();
+    const data = features.map(function (feature) {
+      const name = feature.properties && feature.properties.name;
+      return { name: name, value: values.get(name) || 0 };
+    });
+    const max = Math.max.apply(null, data.map(function (item) { return item.value; }).concat([1]));
+    mapChart.setOption({
+      tooltip: { trigger: 'item', formatter: '{b}：{c} 次' },
+      visualMap: {
+        min: 0,
+        max: max,
+        left: 10,
+        bottom: 10,
+        calculable: false,
+        inRange: { color: ['#e8eefc', '#2563eb'] },
+        textStyle: { color: '#6b7280', fontSize: 12 },
+      },
+      series: [
+        {
+          type: 'map',
+          map: provinceMode ? 'china-provinces' : 'china-cities',
+          roam: true,
+          label: { show: false },
+          itemStyle: { borderColor: '#ffffff', borderWidth: 0.6, areaColor: '#f1f5f9' },
+          emphasis: { itemStyle: { areaColor: '#93c5fd' } },
+          data: data,
+        },
+      ],
+    }, true);
+    renderVisitChips();
+  }
+
+  async function toggleVisit(name, level) {
+    if (!name) return;
+    const exists = manualVisits.some(function (item) {
+      return item.name === name && item.level === level;
+    });
+    const resp = exists
+      ? await fetch('/api/visits?name=' + encodeURIComponent(name) + '&level=' + encodeURIComponent(level), { method: 'DELETE' })
+      : await fetch('/api/visits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name, level: level }),
+        });
+    if (resp.status === 401) {
+      location.href = '/login.html';
+      return;
+    }
+    await refreshManualVisits();
+  }
+
+  async function refreshManualVisits() {
+    try {
+      const resp = await fetch('/api/visits');
+      if (resp.status === 401) {
+        location.href = '/login.html';
+        return;
+      }
+      if (resp.ok) {
+        const data = await resp.json();
+        manualVisits = data.manual || [];
+      }
+    } catch (err) {
+      /* 忽略，仍然渲染地图 */
+    }
+    renderMap();
+  }
+
+  function bindMapControls() {
+    const tabs = document.getElementById('map-tabs');
+    if (tabs) {
+      tabs.addEventListener('click', function (event) {
+        const tab = event.target.closest('.view-tab');
+        if (!tab) return;
+        mapLevel = tab.getAttribute('data-level');
+        Array.prototype.forEach.call(tabs.querySelectorAll('.view-tab'), function (node) {
+          node.classList.toggle('active', node === tab);
+        });
+        renderMap();
+      });
+    }
+    window.addEventListener('resize', function () {
+      if (mapChart) mapChart.resize();
+    });
   }
 
   function switchView(view) {

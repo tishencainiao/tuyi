@@ -694,3 +694,45 @@ body {
 .data-table tbody tr:last-child td {
   border-bottom: none;
 }
+
+/* 旅行地图 */
+.map-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.map-toolbar h2 {
+  margin: 0;
+}
+
+.map {
+  width: 100%;
+  height: 460px;
+}
+
+.visit-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.visit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 12px;
+}
+
+.visit-chip .link-btn {
+  font-size: 14px;
+  line-height: 1;
+}

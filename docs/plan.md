@@ -33,7 +33,7 @@ Node 复用 Momo 大脑（流式 DeepSeek + 工具循环）＋ Web 三页（聊�
 6. 账号与多轮会话：本地账号 + 历史加载（已完成 v1.1.0）
 7. 记忆时序准确与记忆可编辑（已完成 v1.2.0）
 8. 个人看板：我的旅行（城市 / 次数 / 天数 / 预算）+ 全局统计分页签（已完成 v1.3.0）
-9. 全国地图点亮（v2.0.0）
+9. 全国地图点亮：省 / 市粒度切换 + 行程自动点亮 + 手动标记（已完成 v2.0.0）
 
 ## 四、待办
 
@@ -50,3 +50,4 @@ Node 复用 Momo 大脑（流式 DeepSeek + 工具循环）＋ Web 三页（聊�
 - v1.1.0（2026-11-06）：本地账号（brain/auth.js：scrypt 哈希 + httpOnly session cookie，data/users.json / data/sessions.json）+ 多轮会话历史（turns 加 conversationId，新增 GET /api/history，agent 把最近 20 轮历史带入上下文）；所有 /api/*（除 health）改为从 session 取 userId；新增登录页与测试账号脚本（scripts/seed-accounts.js）；新增 docs/modification-plan.md。
 - v1.2.0（2026-11-06）：记忆时序（renderBlock 注入「第 N 次」行程时间线 + persona 序数去歧义）与记忆可编辑（tools/memory-edit.js：add/update/remove，dispatch 加 context；/api/memory 的 POST/PUT/DELETE；个人中心加「添加 / 改 / 删」）；记忆抽取 prompt 排除「修改/删除指令」；事实入库加相似度去重；冒烟 21 项；实测「第一次/第二次」问答与对话式增改删全部通过。
 - v1.3.0（2026-11-06）：看板改为双视角——默认「我的旅行」（brain/stats.js computePersonalStats：城市足迹按目的地归一化、次数 / 天数 / 首末次、平均预算、偏好标签、城市足迹表），全局统计降为次页签（标注含演示数据）；新增 GET /api/stats/personal；冒烟 22 项。地图点亮留到 v2.0.0。
+- v2.0.0（2026-11-06）：全国地图点亮——DataV GeoAtlas 省 / 市级 GeoJSON 本地化（web/vendor/geo/，脚本 scripts/build-geo.js，市级 369 个要素）；看板「我的旅行」新增旅行地图（省 / 市粒度切换、颜色深浅=次数、点击省份 / 城市手动标记去过）；行程目的地自动点亮（城市→省份映射）+ 手动标记（memory.visits，GET/POST/DELETE /api/visits）；冒烟 23 项。

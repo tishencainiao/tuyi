@@ -238,6 +238,34 @@ function handleMemoryRemove(req, res, id) {
   return sendJSON(res, 200, { ok: true });
 }
 
+function handleVisitsList(req, res) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  return sendJSON(res, 200, { manual: memory.listVisits(user.userId) });
+}
+
+async function handleVisitCreate(req, res) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const body = await readJsonBody(req);
+  if (!body) return sendJSON(res, 400, { error: '请求体不是合法 JSON' });
+  const result = memory.addVisit(user.userId, body.name, body.level);
+  if (!result.ok) return sendJSON(res, 400, { error: result.error });
+  return sendJSON(res, 200, result);
+}
+
+function handleVisitRemove(url, req, res) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const result = memory.removeVisit(
+    user.userId,
+    url.searchParams.get('name'),
+    url.searchParams.get('level'),
+  );
+  if (!result.ok) return sendJSON(res, 400, { error: result.error });
+  return sendJSON(res, 200, result);
+}
+
 function health() {
   return {
     ok: true,
@@ -270,6 +298,9 @@ const server = http.createServer((req, res) => {
     if (!user) return sendJSON(res, 401, { error: '未登录' });
     return sendJSON(res, 200, stats.computePersonalStats(memory.load(user.userId)));
   }
+  if (method === 'GET' && pathname === '/api/visits') return handleVisitsList(req, res);
+  if (method === 'POST' && pathname === '/api/visits') return handleVisitCreate(req, res);
+  if (method === 'DELETE' && pathname === '/api/visits') return handleVisitRemove(url, req, res);
   if (method === 'GET' && pathname === '/api/stats') {
     if (!currentUser(req)) return sendJSON(res, 401, { error: '未登录' });
     return sendJSON(res, 200, stats.computeStats(stats.collectRecords()));

@@ -36,8 +36,9 @@ tuyi/
 ├── py/                  # Python：记忆消化（digest.py，里程碑 3 起）
 ├── web/                 # 前端三页
 ├── test/                # 测试（冒烟 + 联网联调）
-├── scripts/             # 辅助脚本（seed-demo / seed-accounts / ablation）
+├── scripts/             # 辅助脚本（seed-demo / seed-accounts / ablation / build-geo）
 ├── docs/                # 设计文档（plan.md / development.md）
+└── data/                # 运行时数据（记忆 / 账号 / 会话，git 忽略）
 └── data/                # 运行时数据（记忆 / 会话，git 忽略）
 ```
 
@@ -60,7 +61,12 @@ node test/live-timeline.js    # 时序联调：第一次 / 第二次（需 Key�
 node test/live-memory-edit.js # 对话式记忆编辑联调（需服务已启动）
 python py/digest.py --user <用户ID> --force   # 手动触发一次记忆消化
 node scripts/seed-demo.js                     # 生成演示数据（看板 / 个人中心用）
+node scripts/build-geo.js                     # 可选：重建地图 GeoJSON（数据已提交，一般不用跑）
 ```
+
+## 地图数据
+
+`web/vendor/geo/` 下的省 / 市级 GeoJSON 来自 [DataV.GeoAtlas](https://geo.datav.aliyun.com/areas_v3/bound/)（阿里云 DataV），已本地化，答辩现场断网也能显示地图。生成脚本见 `scripts/build-geo.js`；论文引用时注明数据来源与用途（学习 / 演示）。
 
 ## 里程碑
 
@@ -72,6 +78,7 @@ node scripts/seed-demo.js                     # 生成演示数据（看板 / �
 6. **账号与多轮会话**（已完成 v1.1.0）：本地账号 + 登录页 + 历史加载。
 7. **记忆时序与可编辑**（已完成 v1.2.0）：行程时间线注入（第一次 / 第 N 次）+ 对话式记忆增改删。
 8. **个人看板**（已完成 v1.3.0）：我的旅行（城市 / 次数 / 天数 / 预算 / 足迹表）+ 全局统计分页签；地图点亮留到 v2.0.0。
+9. **地图点亮**（已完成 v2.0.0）：省 / 市粒度切换，行程自动点亮 + 手动标记去过。
 
 ## 文档
 

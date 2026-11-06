@@ -54,6 +54,7 @@ graph TB
 | `tools/` | 高德 POI、天气、`plan_trip` 结构化校验、`memory_edit` 记忆编辑（自动注册） | 数据接入 / 防幻觉 / 记忆可干预 |
 | `py/digest.py` | 记忆消化：把零散事实反思合成为偏好标签 + 一句话认识 | 创新点 |
 | `web/` | 三页前端（原生 HTML/CSS/JS + ECharts 本地化） | 系统功能与可视化 |
+| `web/vendor/geo/` | 中国省 / 市级 GeoJSON（DataV GeoAtlas，离线可用） | 系统功能与可视化 |
 
 ## 三、一次对话的数据流
 

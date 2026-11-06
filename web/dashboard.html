@@ -47,6 +47,20 @@
         <h2>城市足迹</h2>
         <div id="my-cities-table"></div>
       </section>
+
+      <section class="panel">
+        <div class="map-toolbar">
+          <h2>旅行地图</h2>
+          <div class="view-tabs" id="map-tabs">
+            <button type="button" class="view-tab active" data-level="province">省级</button>
+            <button type="button" class="view-tab" data-level="city">市级</button>
+          </div>
+        </div>
+        <div id="travel-map" class="map"></div>
+        <p class="muted">颜色越深表示去过的次数越多；点击省份 / 城市可手动标记「去过」（再点一次取消）。</p>
+        <div id="visit-chips" class="visit-chips"></div>
+      </section>
+
       <p class="muted" id="personal-hint"></p>
     </section>
 

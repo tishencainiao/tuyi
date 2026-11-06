@@ -45,6 +45,7 @@ function emptyRecord(userId) {
     turns: [],
     memories: [],
     itineraries: [],
+    visits: [],
     insights: null,
     state: { lastDigestAt: null, memoriesSinceDigest: 0 },
   };
@@ -60,6 +61,7 @@ function load(userId) {
     });
     record.memories = Array.isArray(record.memories) ? record.memories : [];
     record.itineraries = Array.isArray(record.itineraries) ? record.itineraries : [];
+    record.visits = Array.isArray(record.visits) ? record.visits : [];
     record.state = record.state || { lastDigestAt: null, memoriesSinceDigest: 0 };
     return record;
   } catch {
@@ -191,6 +193,37 @@ function removeMemory(userId, id) {
   const [removed] = record.memories.splice(index, 1);
   save(record);
   return { ok: true, removed };
+}
+
+function listVisits(userId) {
+  const record = load(userId);
+  return Array.isArray(record.visits) ? record.visits : [];
+}
+
+function addVisit(userId, name, level) {
+  const clean = String(name || '').trim();
+  const targetLevel = level === 'province' ? 'province' : 'city';
+  if (!clean) return { ok: false, error: '缺少地名' };
+  const record = load(userId);
+  record.visits = Array.isArray(record.visits) ? record.visits : [];
+  if (record.visits.some((item) => item.name === clean && item.level === targetLevel)) {
+    return { ok: true, existed: true };
+  }
+  record.visits.push({ name: clean, level: targetLevel, ts: new Date().toISOString() });
+  save(record);
+  return { ok: true };
+}
+
+function removeVisit(userId, name, level) {
+  const clean = String(name || '').trim();
+  if (!clean) return { ok: false, error: '缺少地名' };
+  const record = load(userId);
+  const before = Array.isArray(record.visits) ? record.visits.length : 0;
+  record.visits = (record.visits || []).filter(
+    (item) => !(item.name === clean && (!level || item.level === level)),
+  );
+  save(record);
+  return { ok: true, removed: before - record.visits.length };
 }
 
 function bigrams(text) {
@@ -348,6 +381,9 @@ module.exports = {
   addMemory,
   updateMemory,
   removeMemory,
+  listVisits,
+  addVisit,
+  removeVisit,
   bigrams,
   retrieve,
   renderBlock,
