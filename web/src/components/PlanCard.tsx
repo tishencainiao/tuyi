@@ -1,6 +1,13 @@
 import { useState } from 'react';
-import { Button, Card, Collapse, Popconfirm, Space, Tag, Tooltip } from 'antd';
-import { CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined, EditOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { Button, Card, Collapse, Input, Modal, Popconfirm, Radio, Space, Tag, Tooltip } from 'antd';
+import {
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  PlayCircleOutlined,
+  RollbackOutlined,
+} from '@ant-design/icons';
 import type { Itinerary, PlanStatus } from '../api';
 
 const STATUS_TEXT: Record<PlanStatus, { text: string; color: string }> = {
@@ -9,6 +16,13 @@ const STATUS_TEXT: Record<PlanStatus, { text: string; color: string }> = {
   in_progress: { text: '进行中', color: 'blue' },
   completed: { text: '已完成', color: 'cyan' },
 };
+
+const STATUS_OPTIONS: { value: PlanStatus; label: string; hint: string }[] = [
+  { value: 'draft', label: '草稿（撤销，不再计入统计）', hint: '还没定下来，或不想去了' },
+  { value: 'confirmed', label: '已确认', hint: '方案定了，准备去' },
+  { value: 'in_progress', label: '进行中', hint: '已经出发在玩了' },
+  { value: 'completed', label: '已完成', hint: '旅行结束回来了' },
+];
 
 function formatBudget(value: number) {
   return value > 0 ? '预算 ¥' + String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '预算未定';
@@ -21,6 +35,8 @@ interface Props {
   /** 传了 onStatus 表示渲染状态操作按钮 */
   onStatus?: (plan: Itinerary, status: PlanStatus) => void;
   onDelete?: (plan: Itinerary) => void;
+  /** 传了 onRename 表示支持给行程改名（v3.5.0） */
+  onRename?: (plan: Itinerary, title: string) => void;
   /** 草稿提示条是否显示（聊天页默认显示） */
   showDraftHint?: boolean;
 }
@@ -47,14 +63,39 @@ function DayBlock({ day }: { day: Itinerary['days'][number] }) {
   );
 }
 
-export default function PlanCard({ itinerary, onRevise, onStatus, onDelete, showDraftHint = true }: Props) {
+export default function PlanCard({
+  itinerary,
+  onRevise,
+  onStatus,
+  onDelete,
+  onRename,
+  showDraftHint = true,
+}: Props) {
   const [showOld, setShowOld] = useState(false);
+  // v3.5.0：状态回退（任意回退，Modal 里选目标状态）
+  const [revertOpen, setRevertOpen] = useState(false);
+  const [revertTo, setRevertTo] = useState<PlanStatus>('draft');
+  // v3.5.0：行程改名
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameText, setRenameText] = useState('');
+
   const status = (itinerary.status || 'draft') as PlanStatus;
   const meta = STATUS_TEXT[status];
   const hasOld = Boolean(itinerary.previousDays && itinerary.previousDays.length > 0);
 
+  const openRevert = () => {
+    const candidates = STATUS_OPTIONS.filter((option) => option.value !== status);
+    setRevertTo(candidates[0] ? candidates[0].value : 'draft');
+    setRevertOpen(true);
+  };
+
+  const openRename = () => {
+    setRenameText(itinerary.title || '');
+    setRenameOpen(true);
+  };
+
   const actions = (() => {
-    if (!onStatus && !onRevise && !onDelete) return null;
+    if (!onStatus && !onRevise && !onDelete && !onRename) return null;
     return (
       <Space wrap size={4}>
         {onRevise ? (
@@ -75,6 +116,16 @@ export default function PlanCard({ itinerary, onRevise, onStatus, onDelete, show
         {onStatus && status === 'in_progress' ? (
           <Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => onStatus(itinerary, 'completed')}>
             旅行结束
+          </Button>
+        ) : null}
+        {onStatus && status !== 'draft' ? (
+          <Button size="small" icon={<RollbackOutlined />} onClick={openRevert}>
+            回退状态
+          </Button>
+        ) : null}
+        {onRename ? (
+          <Button size="small" icon={<EditOutlined />} onClick={openRename}>
+            改名
           </Button>
         ) : null}
         {onDelete && status === 'draft' ? (
@@ -139,7 +190,55 @@ export default function PlanCard({ itinerary, onRevise, onStatus, onDelete, show
         />
       ) : null}
 
+      <div className="plan-card-disclaimer">金额与时间仅为估算，仅作参考</div>
+
       {actions ? <div className="plan-card-actions">{actions}</div> : null}
+
+      <Modal
+        title="把这份行程改到什么状态？"
+        open={revertOpen}
+        onOk={() => {
+          if (onStatus) onStatus(itinerary, revertTo);
+          setRevertOpen(false);
+        }}
+        onCancel={() => setRevertOpen(false)}
+        okText="确定改"
+        cancelText="取消"
+      >
+        <Radio.Group value={revertTo} onChange={(event) => setRevertTo(event.target.value as PlanStatus)}>
+          <Space direction="vertical">
+            {STATUS_OPTIONS.filter((option) => option.value !== status).map((option) => (
+              <Radio key={option.value} value={option.value}>
+                {option.label}
+                <div className="muted" style={{ fontSize: 12 }}>
+                  {option.hint}
+                </div>
+              </Radio>
+            ))}
+          </Space>
+        </Radio.Group>
+      </Modal>
+
+      <Modal
+        title="给这份行程起个名字"
+        open={renameOpen}
+        onOk={() => {
+          if (onRename && renameText.trim()) onRename(itinerary, renameText.trim());
+          setRenameOpen(false);
+        }}
+        onCancel={() => setRenameOpen(false)}
+        okText="保存"
+        cancelText="取消"
+        okButtonProps={{ disabled: renameText.trim().length < 1 || renameText.trim().length > 60 }}
+      >
+        <Input
+          value={renameText}
+          onChange={(event) => setRenameText(event.target.value)}
+          maxLength={60}
+          placeholder="例如：成都带爸妈三日游"
+          autoFocus
+        />
+      </Modal>
     </Card>
   );
 }

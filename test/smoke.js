@@ -202,34 +202,58 @@ const sample = {
     const s3 = memory.setItineraryStatus(record.userId, planId, 'completed');
     assert.strictEqual(s3.ok, true);
     const back = memory.setItineraryStatus(record.userId, planId, 'draft');
-    assert.strictEqual(back.ok, false, 'completed 不能退回 draft');
+    assert.strictEqual(back.ok, true, 'v3.5.0：completed 可以回退到 draft');
 
     const bad = memory.setItineraryStatus(record.userId, planId, 'flying');
     assert.strictEqual(bad.ok, false, '非法状态应拒绝');
-    assert.strictEqual(memory.getPlan(record.userId, planId).status, 'completed');
+    assert.strictEqual(memory.getPlan(record.userId, planId).status, 'draft');
   });
 
   await check('记忆：连续修改同一方案', () => {
     const memory = require('../brain/memory');
     const record = memory.emptyRecord('smoke-revise');
-    const created = memory.upsertItinerary(record.userId, { destination: '云南', days: [{ date: '第 1 天', items: [] }] }, { mode: 'create' });
+    const created = memory.upsertItinerary(record.userId, {
+      destination: '云南',
+      days: [{ date: '第 1 天', items: [] }, { date: '第 2 天', items: [] }, { date: '第 3 天', items: [] }],
+    }, { mode: 'create' });
     const planId = created.itinerary.id;
 
+    // 只改第 2 天：第 1 天被替换进 previousDays，第 2/3 天仍是当前天
     const updated = memory.upsertItinerary(record.userId, {
       id: planId,
       destination: '云南',
       title: '云南改期版',
-      days: [{ date: '第 2 天', items: [] }],
+      days: [{ date: '第 2 天', items: [] }, { date: '第 3 天', items: [] }],
     }, { mode: 'update', planId });
     assert.strictEqual(updated.ok, true);
     assert.strictEqual(updated.updated, true);
     assert.strictEqual(updated.itinerary.id, planId, '修改后仍是同一 plan_id');
     assert.strictEqual(updated.itinerary.revisions, 1);
-    assert.strictEqual(updated.itinerary.days.length, 1);
-    assert.strictEqual(updated.itinerary.previousDays.length, 1, '旧天数进入 previousDays');
+    assert.strictEqual(updated.itinerary.days.length, 2);
+    assert.strictEqual(updated.itinerary.previousDays.length, 1, '只有被替换的第 1 天进入 previousDays');
+    assert.strictEqual(updated.itinerary.previousDays[0].date, '第 1 天');
+
+    // v3.5.0：再改一次但保留所有日期 → previousDays 不变多
+    const updated2 = memory.upsertItinerary(record.userId, {
+      id: planId,
+      destination: '云南',
+      days: [{ date: '第 2 天', items: [] }, { date: '第 3 天', items: [] }],
+    }, { mode: 'update', planId });
+    assert.strictEqual(updated2.itinerary.previousDays.length, 1, '未替换的天不会重复进 previousDays');
 
     const list = memory.listPlans(record.userId);
     assert.strictEqual(list.length, 1, '修改不产生新方案');
+  });
+
+  await check('行程改名（v3.5.0）', () => {
+    const memory = require('../brain/memory');
+    const record = memory.emptyRecord('smoke-rename');
+    const created = memory.upsertItinerary(record.userId, { destination: '云南', days: [{}] }, { mode: 'create' });
+    const renamed = memory.renameItinerary(record.userId, created.itinerary.id, '云南蜜月之旅');
+    assert.strictEqual(renamed.ok, true);
+    assert.strictEqual(renamed.itinerary.title, '云南蜜月之旅');
+    const tooLong = memory.renameItinerary(record.userId, created.itinerary.id, '字'.repeat(61));
+    assert.strictEqual(tooLong.ok, false, '超长名字应拒绝');
   });
 
   await check('统计：仅统计非草稿行程', () => {

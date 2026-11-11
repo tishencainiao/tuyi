@@ -6,6 +6,7 @@
 | --- | --- |
 | [plan.md](plan.md) | 方案定稿（选型 / 里程碑 / 变更记录） |
 | [v3-plan.md](v3-plan.md) | v3 更新方案（18 条反馈 → v3.0.0~v3.4.0 版本计划，已拍板） |
+| [v3.5-plan.md](v3.5-plan.md) | v3.5~v3.7 微调方案（12 条反馈 → 版本计划与拍板清单，已拍板） |
 | [architecture.md](architecture.md) | 系统架构与数据流（论文第 3 章素材） |
 | [prompt-engineering.md](prompt-engineering.md) | 提示词设计与防幻觉策略（论文第 4 章素材） |
 | [ablation.md](ablation.md) | 消融实验设计（论文第 5 章素材） |

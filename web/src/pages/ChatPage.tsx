@@ -40,7 +40,8 @@ const SUGGESTIONS = [
 ];
 
 const IDLE_AFTER_MS = 30000;
-const VIDEO_SWITCH_MS = 6000;
+// v3.5.0：动作频率降低——忙碌时固定一个动作不轮换；休闲时每 30 秒换一个
+const VIDEO_SWITCH_MS = 30000;
 const WORK_VIDEOS = ['work-map', 'work-hand-plan', 'work-typing'];
 const IDLE_VIDEOS = ['idle-nap', 'idle-milktea', 'idle-spin'];
 
@@ -52,6 +53,7 @@ function XiaoyiLive({ busy, lastActivity }: { busy: boolean; lastActivity: numbe
   useEffect(() => {
     if (busy) {
       setMode('work');
+      setVideoIndex(0);
       return;
     }
     const check = () => setMode(Date.now() - lastActivity > IDLE_AFTER_MS ? 'idle' : null);
@@ -60,9 +62,9 @@ function XiaoyiLive({ busy, lastActivity }: { busy: boolean; lastActivity: numbe
     return () => window.clearInterval(timer);
   }, [busy, lastActivity]);
 
-  // loop 视频不会触发 onEnded，用定时器轮换动作
+  // loop 视频不会触发 onEnded，用定时器轮换动作；忙碌时不轮换
   useEffect(() => {
-    if (!mode) return;
+    if (!mode || mode === 'work') return;
     const timer = window.setInterval(() => setVideoIndex((index) => index + 1), VIDEO_SWITCH_MS);
     return () => window.clearInterval(timer);
   }, [mode]);
@@ -167,7 +169,7 @@ export default function ChatPage() {
       const result = await api.setPlanStatus(plan.id, status);
       updatePlan(result.itinerary);
       const labels: Record<PlanStatus, string> = {
-        draft: '草稿',
+        draft: '已改回草稿，这份行程不再计入旅行足迹',
         confirmed: '已确认行程，城市已点亮到地图',
         in_progress: '已标记为进行中，祝玩得开心',
         completed: '行程已完成，已计入你的旅行足迹',
@@ -193,16 +195,30 @@ export default function ChatPage() {
     setInput('修改这份行程（' + (plan.title || plan.destination || '旅行方案') + '）：');
   };
 
+  const handleRename = async (plan: Itinerary, title: string) => {
+    if (!plan.id) return;
+    try {
+      const result = await api.renamePlan(plan.id, title);
+      updatePlan(result.itinerary);
+      message.success('行程名已更新');
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '改名失败');
+    }
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
     setInput('');
     setSending(true);
     setLastActivity(Date.now());
+    // v3.5.0 修复：assistant 气泡创建时就带 ts，保证时间线排序稳定——
+    // 之前流式结束后 assistant 没有 ts，会被排到最后，新消息反而被旧回复挤到上方
+    const now = new Date().toISOString();
     setMessages((prev) => [
       ...prev,
-      { role: 'user', text, ts: new Date().toISOString() },
-      { role: 'assistant', text: '', streaming: true },
+      { role: 'user', text, ts: now },
+      { role: 'assistant', text: '', streaming: true, ts: now },
     ]);
 
     const appendAssistant = (chunk: string) => {
@@ -258,6 +274,8 @@ export default function ChatPage() {
 
   const onPressEnter = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.shiftKey) return;
+    // v3.5.0：输入法（拼音/五笔）候选词回车不触发发送，避免打一半的字被发出去
+    if (event.nativeEvent.isComposing) return;
     event.preventDefault();
     void send();
   };
@@ -323,6 +341,7 @@ export default function ChatPage() {
               onStatus={handleStatus}
               onRevise={handleRevise}
               onDelete={handleDelete}
+              onRename={handleRename}
             />
           ),
         )}

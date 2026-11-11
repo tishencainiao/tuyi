@@ -134,11 +134,22 @@ function run(args, context) {
   });
 
   const checked = buildItinerary(
-    { title: String(args.title || destination + '行程'), destination, budget_cny: toNumber(args.budget_cny) },
+    {
+      title: String(args.title || defaultPlanTitle(destination)),
+      destination,
+      budget_cny: toNumber(args.budget_cny),
+    },
     days,
     warnings,
   );
   return { ok: true, itinerary: { ...checked, mode: 'create' }, warnings };
+}
+
+// v3.5.0：行程名默认带创建日期，方便用户区分多次行程（用户可自行改名）
+function defaultPlanTitle(destination) {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return destination + '之旅 · ' + now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
 }
 
 function buildItinerary(source, days, warnings) {

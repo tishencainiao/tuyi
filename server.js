@@ -366,6 +366,17 @@ function handlePlanRemove(req, res, id) {
   return sendJSON(res, 200, { ok: true });
 }
 
+// v3.5.0：行程改名（PUT /api/plans/:id { title }）
+async function handlePlanRename(req, res, id) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const body = await readJsonBody(req);
+  if (!body) return sendJSON(res, 400, { error: '请求体不是合法 JSON' });
+  const result = memory.renameItinerary(user.userId, id, String(body.title || '').trim());
+  if (!result.ok) return sendJSON(res, 400, { error: result.error });
+  return sendJSON(res, 200, { ok: true, itinerary: result.itinerary });
+}
+
 async function handleVisitCreate(req, res) {
   const user = currentUser(req);
   if (!user) return sendJSON(res, 401, { error: '未登录' });
@@ -430,6 +441,7 @@ const server = http.createServer((req, res) => {
   if (method === 'GET' && pathname === '/api/plans') return handlePlansList(req, res);
   const planPath = pathname.match(/^\/api\/plans\/([^/]+)$/);
   if (planPath && method === 'DELETE') return handlePlanRemove(req, res, decodeURIComponent(planPath[1]));
+  if (planPath && method === 'PUT') return handlePlanRename(req, res, decodeURIComponent(planPath[1]));
   const planStatusPath = pathname.match(/^\/api\/plans\/([^/]+)\/status$/);
   if (planStatusPath && method === 'PUT') return handlePlanStatus(req, res, decodeURIComponent(planStatusPath[1]));
 

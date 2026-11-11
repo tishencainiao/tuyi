@@ -238,6 +238,12 @@ export const api = {
     }),
   removePlan: (id: string) =>
     request<{ ok: boolean }>('/api/plans/' + encodeURIComponent(id), { method: 'DELETE' }),
+  renamePlan: (id: string, title: string) =>
+    request<{ ok: boolean; itinerary: Plan }>('/api/plans/' + encodeURIComponent(id), {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ title }),
+    }),
 
   createMemory: (text: string, tags: string[]) =>
     request<{ ok: boolean }>('/api/memory', {

@@ -315,6 +315,14 @@ body {
   border-top: 1px dashed var(--tuyi-line);
 }
 
+.plan-card-disclaimer {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--tuyi-sub);
+  opacity: 0.85;
+}
+
 /* ---------- 我的旅行 ---------- */
 .kpi-card {
   text-align: center;
@@ -376,17 +384,15 @@ body {
   color: var(--tuyi-sky-deep);
 }
 
-/* 小忆动态形象卡片（生成方案=工作动作，30 秒无操作=休闲动作） */
+/* 小忆动态形象卡片（v3.5.0：右上角、与聊天背景同色融为一体） */
 .xiaoyi-live {
   position: absolute;
   right: 24px;
-  bottom: 96px;
+  top: 96px;
   width: 168px;
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid var(--tuyi-line);
-  background: #ffffff;
-  box-shadow: 0 8px 24px rgba(14, 165, 233, 0.16);
+  background: var(--tuyi-bg);
   z-index: 10;
   animation: xiaoyi-pop 0.35s ease;
 }

@@ -152,12 +152,18 @@ export default function ProfilePage() {
     }
   };
 
-  // v3.1.0：行程状态操作（与聊天页一致）
+  // v3.1.0：行程状态操作（与聊天页一致；v3.5.0 支持回退）
   const handleStatus = async (itinerary: Profile['itineraries'][number], status: PlanStatus) => {
     if (!itinerary.id) return;
     try {
       await api.setPlanStatus(itinerary.id, status);
-      message.success(status === 'confirmed' ? '已确认，城市已点亮到地图' : status === 'in_progress' ? '已标记为进行中' : '已完成');
+      const labels: Record<PlanStatus, string> = {
+        draft: '已改回草稿，不再计入旅行足迹',
+        confirmed: '已确认，城市已点亮到地图',
+        in_progress: '已标记为进行中',
+        completed: '已完成',
+      };
+      message.success(labels[status]);
       load();
     } catch (err) {
       message.error(err instanceof ApiError ? err.message : '更新失败');
@@ -172,6 +178,18 @@ export default function ProfilePage() {
       load();
     } catch (err) {
       message.error(err instanceof ApiError ? err.message : '删除失败');
+    }
+  };
+
+  // v3.5.0：行程改名
+  const handleRename = async (itinerary: Profile['itineraries'][number], title: string) => {
+    if (!itinerary.id) return;
+    try {
+      await api.renamePlan(itinerary.id, title);
+      message.success('行程名已更新');
+      load();
+    } catch (err) {
+      message.error(err instanceof ApiError ? err.message : '改名失败');
     }
   };
 
@@ -309,6 +327,8 @@ export default function ProfilePage() {
                     key={itinerary.id || itinerary.ts}
                     onStatus={handleStatus}
                     onDelete={handleDelete}
+                    onRename={handleRename}
+                    showDraftHint={false}
                   />
                 ))}
               </div>

@@ -269,3 +269,13 @@
 - 数据迁移基建：记忆文件 `schemaVersion=2`（旧文件加载时补齐落盘）、资料文件 `schemaVersion=1`（写盘时补）。
 - 文档地图：`docs/index.md` + check.js 新增 [4/4] 文档地图完整性校验；check.js 跳过 dist、按错误信息放行 ESM 文件。
 - 发布脚本：`scripts/release.ps1`（幂等补推：每远端 ls-remote 对比、只推不一致的 master/tag、3 次重试、wincred 凭据、-DryRun 预览）。
+
+### v3.5.0（2026-11-11，微调包 1：体验修复）
+- ④消息乱序修复：assistant 气泡创建时即带 ts（原只在 user 消息带），timeline 排序恢复严格交替；输入法组合态回车不再误发。
+- ①②③小忆形象：悬浮卡移到右上角（top 96px / right 24px）、背景改聊天页同色去边框阴影（视觉融合）、忙碌时固定一个动作不轮换、闲时 30 秒一换。
+- ⑤状态可回退：STATUS_FLOW 改全连通（任一状态可切到其余三态）；update_plan_status 工具 enum 加 draft；PlanCard 加「回退状态」Modal（单选目标状态，改回草稿不再计入足迹）；persona 生命周期节同步。
+- ⑤previousDays 修复：连续修改只把「旧 days 中日期不在新 days 里」的天归档，与已有归档按日期去重合并（不再整份误塞）。
+- ⑤删除联动：删除行程（仅草稿可删）后小忆自动补一条记事「用户删除了行程方案「title」」。
+- ⑨免责声明：行程卡底部「金额与时间仅为估算，仅作参考」。
+- ⑫行程名：生成兜底名改「目的地之旅 · 当天日期」；新增 PUT /api/plans/:id（renameItinerary，1~60 字）与卡片「改名」Modal。
+- 测试：smoke 32/32、unit 25/25（新增回退允许/previousDays diff/改名用例）、lint 0 错、build ✓。

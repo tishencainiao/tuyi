@@ -25,6 +25,7 @@ const MAX_ITINERARIES = 20;
 const CURRENT_SCHEMA = 2;
 
 // 行程状态机（v3.1.0）：生成后是草稿，用户确认后才算数
+// v3.5.0：改为全连通——任意状态可回退到其他状态（回退由前端确认框把关）
 const PLAN_STATUS = {
   DRAFT: 'draft',
   CONFIRMED: 'confirmed',
@@ -33,9 +34,9 @@ const PLAN_STATUS = {
 };
 const STATUS_FLOW = {
   draft: [PLAN_STATUS.CONFIRMED, PLAN_STATUS.IN_PROGRESS, PLAN_STATUS.COMPLETED],
-  confirmed: [PLAN_STATUS.IN_PROGRESS, PLAN_STATUS.COMPLETED],
-  in_progress: [PLAN_STATUS.COMPLETED],
-  completed: [],
+  confirmed: [PLAN_STATUS.DRAFT, PLAN_STATUS.IN_PROGRESS, PLAN_STATUS.COMPLETED],
+  in_progress: [PLAN_STATUS.DRAFT, PLAN_STATUS.CONFIRMED, PLAN_STATUS.COMPLETED],
+  completed: [PLAN_STATUS.DRAFT, PLAN_STATUS.CONFIRMED, PLAN_STATUS.IN_PROGRESS],
 };
 
 const promptCache = new Map();
@@ -205,7 +206,22 @@ function upsertItinerary(userId, itinerary, options = {}) {
       budget_cny: target.budget_cny,
       days: target.days,
     };
-    target.previousDays = before.days;
+    // v3.5.0：previousDays 只收「这次真的被替换掉的天」——
+    // 新 days 里日期仍在的天（未改动/保留的后续天）不进入 previousDays
+    const newDateSet = new Set(
+      (Array.isArray(itinerary.days) ? itinerary.days : []).map((day) => String(day && day.date)),
+    );
+    const replacedDays = before.days.filter((day) => !newDateSet.has(String(day && day.date)));
+    const merged = new Map();
+    const seenDates = new Set();
+    const existing = Array.isArray(target.previousDays) ? target.previousDays : [];
+    for (const day of [...existing, ...replacedDays]) {
+      const key = String(day && day.date);
+      if (!key || seenDates.has(key)) continue;
+      seenDates.add(key);
+      merged.set(key, day);
+    }
+    target.previousDays = [...merged.values()].slice(0, 20);
     target.title = String(itinerary.title || before.title);
     target.destination = String(itinerary.destination || before.destination);
     target.budget_cny = Number(itinerary.budget_cny) || before.budget_cny;
@@ -274,8 +290,24 @@ function removeItinerary(userId, planId) {
     return { ok: false, error: '只有「草稿」状态的方案可以删除；已确认的方案不能删除' };
   }
   record.itineraries = record.itineraries.filter((item) => String(item.id) !== String(planId));
+  // v3.5.0：删除后补一条记事，让小忆知道这件事（时间线里不再有它）
+  appendTurn(record, 'assistant', '记事：用户删除了行程方案「' + plan.title + '」。', 'default');
   save(record);
   return { ok: true, removed: plan };
+}
+
+function renameItinerary(userId, planId, title) {
+  const record = load(userId);
+  const plan = findPlan(record, planId);
+  if (!plan) return { ok: false, error: '找不到该行程方案' };
+  const clean = String(title || '').trim();
+  if (clean.length < 1 || clean.length > 60) {
+    return { ok: false, error: '行程名长度需在 1~60 字之间' };
+  }
+  plan.title = clean;
+  plan.updatedAt = new Date().toISOString();
+  save(record);
+  return { ok: true, itinerary: plan };
 }
 
 function findMemories(userId, text) {
@@ -513,6 +545,7 @@ module.exports = {
   listPlans,
   setItineraryStatus,
   removeItinerary,
+  renameItinerary,
   findMemories,
   addMemory,
   updateMemory,
