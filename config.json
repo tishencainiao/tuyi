@@ -1,5 +1,12 @@
 {
-  "server": { "host": "127.0.0.1", "port": 8787 },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8787,
+    "rate_limit": {
+      "window_ms": 600000,
+      "max_chat_per_window": 30
+    }
+  },
   "llm": {
     "base_url": "https://api.deepseek.com",
     "model": "deepseek-v4-flash",
@@ -13,5 +20,7 @@
     "digest_min_interval_minutes": 1,
     "max_inject_memories": 5
   },
-  "budget": { "daily_cny": 2 }
+  "budget": {
+    "daily_cny": 2
+  }
 }

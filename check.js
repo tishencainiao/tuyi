@@ -22,7 +22,7 @@ function bad(msg) {
 
 function collectJs(dir, out) {
   for (const name of fs.readdirSync(dir)) {
-    if (name === 'node_modules' || name === 'data' || name.startsWith('.')) continue;
+    if (name === 'node_modules' || name === 'data' || name === 'dist' || name.startsWith('.')) continue;
     const abs = path.join(dir, name);
     const stat = fs.statSync(abs);
     if (stat.isDirectory()) collectJs(abs, out);
@@ -35,9 +35,13 @@ const files = [];
 collectJs(ROOT, files);
 let syntaxErrors = 0;
 for (const file of files) {
+  const code = fs.readFileSync(file, 'utf8');
   try {
-    new vm.Script(fs.readFileSync(file, 'utf8'), { filename: file });
+    new vm.Script(code, { filename: file });
   } catch (err) {
+    // ESM 文件（如 eslint.config.js）报 import/export 语法错——Node 18 下 vm 无法直接解析模块，按 ESM 放行
+    const message = String(err.message || '');
+    if (/import statement|Unexpected token 'export'/.test(message)) continue;
     syntaxErrors += 1;
     bad(path.relative(ROOT, file) + '：' + err.message);
   }
@@ -69,6 +73,24 @@ try {
   for (const def of defs) ok('工具 ' + def.function.name);
 } catch (err) {
   bad('加载工具失败：' + err.message);
+}
+
+// v3.4.0：文档地图完整性（docs/index.md 应列出所有 docs/*.md）
+console.log('[4/4] 文档地图检查');
+try {
+  const docsDir = path.join(ROOT, 'docs');
+  const indexText = fs.readFileSync(path.join(docsDir, 'index.md'), 'utf8');
+  const listed = fs.readdirSync(docsDir).filter((name) => name.endsWith('.md') && name !== 'index.md');
+  let docFail = 0;
+  for (const name of listed) {
+    if (!indexText.includes(name)) {
+      docFail += 1;
+      bad('docs/index.md 未列出 ' + name);
+    }
+  }
+  if (!docFail) ok('docs/index.md 已覆盖全部 ' + listed.length + ' 个文档');
+} catch (err) {
+  bad('文档地图检查失败：' + err.message);
 }
 
 if (failed) {

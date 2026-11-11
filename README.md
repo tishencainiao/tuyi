@@ -21,7 +21,7 @@
 ```
 tuyi/
 ├── server.js            # HTTP 服务：静态页面 + /api/chat（SSE）
-├── check.js             # 自检：语法 + 配置 + 工具注册
+├── check.js             # 自检：语法 + 配置 + 工具注册 + 文档地图
 ├── config.json          # 非敏感配置
 ├── .env.example         # 密钥模板（复制为 .env 后填写）
 ├── brain/               # 大脑：与界面无关的智能体逻辑
@@ -61,14 +61,17 @@ powershell -ExecutionPolicy Bypass -File scripts\install-shortcuts.ps1
 # 「途忆（打开网页）」只开网页；「途忆（停止服务）」停服务。日志在 logs/server.*.log。
 
 # 3. 自检与测试
-node check.js             # 语法 + 配置 + 工具注册
+node check.js             # 自检：语法 + 配置 + 工具注册 + 文档地图
 node test/smoke.js        # 冒烟测试（不联网）
+node --test test/unit/    # 单元测试（node:test，不联网）
+cd web && npm run lint    # 前端 ESLint（首次先 npm install）
 node test/live.js         # 手动联网联调（需 Key + 网络，会真实调用 DeepSeek 和高德）
 node test/live-auth.js    # 账号 + 历史联调（需服务已启动）
 node test/live-timeline.js    # 时序联调：第一次 / 第二次（需 Key）
 node test/live-memory-edit.js # 对话式记忆编辑联调（需服务已启动）
 python py/digest.py --user <用户ID> --force   # 手动触发一次记忆消化
 node scripts/build-geo.js                     # 可选：重建地图 GeoJSON（数据已提交，一般不用跑）
+powershell -ExecutionPolicy Bypass -File scripts/release.ps1  # 发布：幂等补推双远端（-DryRun 预览）
 ```
 
 ## 地图数据
@@ -91,6 +94,7 @@ node scripts/build-geo.js                     # 可选：重建地图 GeoJSON（
 12. **行程生命周期**（v3.1.0）：行程状态机（草稿 → 已确认 → 进行中 → 已完成）；生成默认草稿、确认后会计入去过城市并点亮地图；连续修改（同一方案原地改，只重排未进行的天，历史版本可展开查看）；聊天页 / 个人中心可查看详情、确认、出发、完成、删除草稿；刷新切页后行程卡片完整恢复。
 13. **账号与个人资料**（v3.2.0）：注册支持用户名 / 邮箱 / 手机号三种方式（邮箱手机走模拟验证码，演示环境直接显示，正式版改短信 / 邮件下发）；注册后进入引导页填写资料（可跳过）：称呼 / 年龄 / 性别 / 同行家人朋友 / 偏好标签 / 旅行风格 / 健康备注；资料在排行程时注入提示词（老人小孩同行会放慢节奏）；个人中心可随时查看与修改。
 14. **小忆形象与话术**（v3.3.0）：即梦 Dreamina 出图的小云朵精灵素材接入（logo / App 图标 / 立绘 / 六个动作视频，脚本 scripts/build-xiaoyi-assets.py 生成派生图）；聊天页 QQ 风格小忆头像 + 动态形象卡（排行程播工作动作，30 秒无操作播休闲动作）；小忆回复支持 Markdown 排版；话术去 AI 味（硬禁词表 + 书面腔替换 + 查不到价格就说「以携程 / 美团实时价为准」，不再出现「接口没返回房价」这类技术话）。
+15. **工程化收尾**（v3.4.0）：全局统计彻底删除（只保留个人统计与个人地图，论文素材改用「个人旅行大数据统计」口径）；删除 web/legacy 旧页面；新增单元测试（node --test，4 个文件 24 项）、前端 ESLint、Vite 拆包（首屏脚本 2.1MB→44KB+gzip 分包）、聊天限流（防接口被打爆）、数据文件 schema 版本号（便于后续迁移）、docs 文档地图 + check.js 完整性校验、发布脚本 scripts/release.ps1（幂等补推双远端）。
 
 ## 文档
 

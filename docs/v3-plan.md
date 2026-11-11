@@ -258,3 +258,14 @@
 - 工具：`tools/_amap.js formatPoi` 对无价格的酒店类 POI 返回 `price_note`（「暂无公开价格，价格以携程 / 美团实时价为准」），供模型直接引用。
 - server.js：静态放行 `/xiaoyi/` 前缀（登录页也要加载形象）、MIME 增 `.mp4/.webm`。
 - 实测：真实 LLM 问「春熙路一带的酒店」→ 回复「因为价格查不到，所以下面不写金额，房价请以携程 / 美团实时页为准」，不再出现「接口没返回房价」；带长辈提示生效（引用 test1 资料里的外婆）。
+
+### v3.4.0（2026-11-11）
+- 全局统计彻底删除（拍板⑥）：`brain/stats.js` 删除 `collectRecords`/`computeStats` 与 exports（保留 `computePersonalStats` 等个人统计）；server.js 删除 `GET /api/stats`；smoke 对应用例移除。论文「大数据元素」口径改为：个人旅行统计 + 个人地图点亮（数据更大也更真实）。
+- 旧页面删除：`git rm -r web/legacy`（9 文件）；server.js 删除 serveLegacy/LEGACY_DIR 与 /legacy 路由（保留旧地址 302 重定向）。
+- 限流：`config.json server.rate_limit`（10 分钟窗口 / 30 次聊天），server.js `rateCheck(ip)` 滑动窗口 + 定时清理，超限 429。
+- 单元测试：`node --test test/unit/`（node:test 内置，4 文件 26 项：auth 7 / profile 5 / stats 6 / memory-plan 8，全部通过；TUYI_DATA_DIR 临时目录隔离）。
+- ESLint：`web/eslint.config.js`（flat config：eslint@9 + typescript-eslint + react-hooks），`npm run lint` 0 错 0 警（清理了 TravelPage 的 any 等）。
+- 拆包：vite manualChunks（react/antd/echarts/markdown 四组），首屏脚本 2.1MB → 44KB + 四个 vendor 分包，chunkSizeWarningLimit 1200。
+- 数据迁移基建：记忆文件 `schemaVersion=2`（旧文件加载时补齐落盘）、资料文件 `schemaVersion=1`（写盘时补）。
+- 文档地图：`docs/index.md` + check.js 新增 [4/4] 文档地图完整性校验；check.js 跳过 dist、按错误信息放行 ESM 文件。
+- 发布脚本：`scripts/release.ps1`（幂等补推：每远端 ls-remote 对比、只推不一致的 master/tag、3 次重试、wincred 凭据、-DryRun 预览）。

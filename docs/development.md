@@ -27,9 +27,12 @@ commit message 用「类型: 说明」格式：
 
 ## 三、测试纪律
 
-- 每次提交前跑 `node check.js`（语法 + 配置 + 工具注册）；
+- 每次提交前跑 `node check.js`（语法 + 配置 + 工具注册 + 文档地图完整性）；
 - 冒烟测试 `node test/smoke.js`（不联网）；
-- 改了模型 / 高德相关代码后，跑一次联网联调 `node test/live.js`（需要 .env 和网络，会真实调用 DeepSeek 与高德）。
+- 单元测试 `node --test test/unit/`（node:test 内置，不联网；改了 auth/profile/stats/memory 相关代码先跑这里）；
+- 前端改动后跑 `cd web && npm run lint` 与 `npm run build`（TS 类型检查 + ESLint + 打包）；
+- 改了模型 / 高德相关代码后，跑一次联网联调 `node test/live.js`（需要 .env 和网络，会真实调用 DeepSeek 与高德）；
+- 发布用 `powershell -ExecutionPolicy Bypass -File scripts/release.ps1`（幂等补推双远端，-DryRun 预览）。
 
 ## 四、密钥红线
 
@@ -42,8 +45,8 @@ commit message 用「类型: 说明」格式：
 
 - `brain/` 只放与界面无关的智能体逻辑（模型客户端、主循环、工具注册、提示词）；
 - `tools/` 一个文件一个工具，文件名不以 `_` 开头；`_` 开头的是共享库（如 `_amap.js`）；
-- `web/` 是纯静态页面，不引入构建工具；
-- `docs/` 放设计文档（`plan.md` 是方案定稿）。
+- `web/` 是前端（v3.0.0 起 Vite + React + TS，源码在 `web/src/`，构建产物 `web/dist/` 由 server.js 托管，不提交 dist 之外的运行时产物）；
+- `docs/` 放设计文档（`plan.md` 是方案定稿，`index.md` 是文档地图，新增文档记得登记）。
 
 ## 六、复用说明
 

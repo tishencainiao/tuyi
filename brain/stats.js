@@ -1,18 +1,18 @@
 'use strict';
 
 /**
- * 偏好统计（大数据元素）
+ * 个人旅行统计（大数据元素，v3.4.0 起只做个人统计）
  *
- * 扫描 data/memory/*.json，把用户记忆汇总成看板数据：
+ * 对单个用户的 data/memory/<userId>.json 汇总：
+ * - 去过城市与次数：来自已确认行程（status 非 draft）的 destination
  * - 标签分布：memories.tags + insights.tags 计数
- * - 目的地分布：行程 destination + 记忆文本里出现的城市名
- * - 预算档位分布：从记忆文本里的金额 / 关键词规则分档
- * - 提问意图分布：对用户消息做规则分类（行程 / 景点 / 天气 / 预算 / 交通 / 其他）
+ * - 预算/天数汇总
  *
  * 说明：意图与预算用「规则」分类（轻量、可解释）；论文里可以替换成模型分类做对比实验。
+ * 历史：v0.4.0~v1.2.0 曾有 computeStats/collectRecords 做全体用户聚合（GET /api/stats），
+ * 2026-11-11 拍板删除，只保留个人统计。
  */
 
-const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
@@ -62,92 +62,11 @@ function budgetBucket(text) {
   return '未说明';
 }
 
-function collectRecords(dataDir = DATA_DIR) {
-  const records = [];
-  let names = [];
-  try {
-    names = fs.readdirSync(dataDir);
-  } catch {
-    return records;
-  }
-  for (const name of names) {
-    if (!name.endsWith('.json') || name.startsWith('.')) continue;
-    try {
-      const record = JSON.parse(fs.readFileSync(path.join(dataDir, name), 'utf8'));
-      if (record && record.userId) records.push(record);
-    } catch {
-      /* 跳过坏文件 */
-    }
-  }
-  return records;
-}
-
 function toArray(map, limit = 12) {
   return [...map.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
     .map(([label, value]) => ({ label, value }));
-}
-
-function computeStats(records = []) {
-  const tagCount = new Map();
-  const cityCount = new Map();
-  const budgetCount = new Map();
-  const intentCount = new Map();
-  let memories = 0;
-  let itineraries = 0;
-  let digests = 0;
-
-  for (const record of records) {
-    memories += (record.memories || []).length;
-    itineraries += (record.itineraries || []).length;
-    if (record.insights && record.insights.summary) digests += 1;
-
-    for (const item of record.memories || []) {
-      for (const tag of item.tags || []) tagCount.set(tag, (tagCount.get(tag) || 0) + 1);
-      const bucket = budgetBucket(item.text);
-      if (bucket !== '未说明') budgetCount.set(bucket, (budgetCount.get(bucket) || 0) + 1);
-      const text = String(item.text || '');
-      for (const city of CITIES) {
-        if (text.includes(city)) cityCount.set(city, (cityCount.get(city) || 0) + 1);
-      }
-    }
-
-    for (const tag of (record.insights && record.insights.tags) || []) {
-      tagCount.set(tag, (tagCount.get(tag) || 0) + 1);
-    }
-
-    for (const itinerary of record.itineraries || []) {
-      const destination = String(itinerary.destination || '').trim();
-      if (destination) cityCount.set(destination, (cityCount.get(destination) || 0) + 1);
-    }
-
-    for (const turn of record.turns || []) {
-      if (turn.role !== 'user') continue;
-      const intent = classifyIntent(turn.text);
-      intentCount.set(intent, (intentCount.get(intent) || 0) + 1);
-    }
-  }
-
-  const intentSamples = [...intentCount.values()].reduce((sum, value) => sum + value, 0);
-
-  return {
-    totals: {
-      users: records.length,
-      memories,
-      itineraries,
-      digests,
-      intents: intentSamples,
-    },
-    tagDistribution: toArray(tagCount, 12),
-    cityDistribution: toArray(cityCount, 10),
-    budgetDistribution: [...budgetCount.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([label, value]) => ({ label, value })),
-    intentDistribution: [...intentCount.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([label, value]) => ({ label, value })),
-  };
 }
 
 function normalizeCity(name) {
@@ -222,7 +141,5 @@ module.exports = {
   classifyIntent,
   budgetBucket,
   normalizeCity,
-  computeStats,
   computePersonalStats,
-  collectRecords,
 };

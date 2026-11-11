@@ -255,33 +255,8 @@ const sample = {
     assert.strictEqual(stats.budgetBucket('随便'), '未说明');
   });
 
-  await check('统计：多用户汇总', () => {
-    const stats = require('../brain/stats');
-    const records = [
-      {
-        userId: 'a',
-        memories: [{ text: '带父母去成都，预算中等', tags: ['带父母'] }],
-        insights: { summary: 's', tags: ['慢节奏'] },
-        itineraries: [{ destination: '成都' }],
-        turns: [
-          { role: 'user', text: '帮我排个行程' },
-          { role: 'assistant', text: '好的' },
-        ],
-      },
-      {
-        userId: 'b',
-        memories: [{ text: '预算 5000 元去云南', tags: ['自然风光'] }],
-        itineraries: [],
-        turns: [{ role: 'user', text: '云南天气怎么样' }],
-      },
-    ];
-    const result = stats.computeStats(records);
-    assert.strictEqual(result.totals.users, 2);
-    assert.strictEqual(result.totals.memories, 2);
-    assert.strictEqual(result.totals.itineraries, 1);
-    assert.ok(result.tagDistribution.length >= 2);
-    assert.ok(result.intentDistribution.length >= 2);
-  });
+  // v3.4.0：全局统计（computeStats/collectRecords）已删除，不再有对应用例；
+  // 个人统计见「统计：个人画像只算已确认行程」用例。
 
   await check('账号：注册 / 登录 / 会话 / 密码不落明文', () => {
     const fs = require('node:fs');

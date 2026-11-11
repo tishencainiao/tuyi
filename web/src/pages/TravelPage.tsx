@@ -4,7 +4,7 @@ import { Alert, App, Button, Card, Col, Empty, Row, Segmented, Spin, Statistic, 
 import * as echarts from 'echarts';
 import { api, ApiError, PersonalStats, Visit } from '../api';
 
-function normName(name: string) {
+function normName(name: string | undefined) {
   return String(name || '')
     .replace(/(省|市|自治区|特别行政区|自治州|地区|盟)$/g, '')
     .trim();
@@ -14,22 +14,30 @@ function fmt(value: number) {
   return String(value == null ? 0 : value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
-let geoPromise: Promise<{ provinces: unknown; cities: unknown }> | null = null;
+// GeoJSON 结构较松，这里只用到 features 与 properties.name/province
+interface GeoFeature {
+  properties: { name?: string; province?: string };
+}
+interface GeoDoc {
+  type?: string;
+  features?: GeoFeature[];
+}
+type Geo = { provinces: GeoDoc; cities: GeoDoc };
+
+let geoPromise: Promise<Geo> | null = null;
 function loadGeo() {
   if (!geoPromise) {
     geoPromise = Promise.all([
-      fetch('/vendor/geo/china-provinces.json').then((resp) => resp.json()),
-      fetch('/vendor/geo/china-cities.json').then((resp) => resp.json()),
+      fetch('/vendor/geo/china-provinces.json').then((resp) => resp.json() as Promise<GeoDoc>),
+      fetch('/vendor/geo/china-cities.json').then((resp) => resp.json() as Promise<GeoDoc>),
     ]).then(([provinces, cities]) => {
-      echarts.registerMap('china-provinces', provinces);
-      echarts.registerMap('china-cities', cities);
+      echarts.registerMap('china-provinces', provinces as Parameters<typeof echarts.registerMap>[1]);
+      echarts.registerMap('china-cities', cities as Parameters<typeof echarts.registerMap>[1]);
       return { provinces, cities };
     });
   }
   return geoPromise;
 }
-
-type Geo = { provinces: any; cities: any };
 
 export default function TravelPage() {
   const { message } = App.useApp();
@@ -156,8 +164,8 @@ export default function TravelPage() {
         const values = new Map<string, number>();
 
         if (provinceMode) {
-          const cityIndex = new Map<string, { properties: { name: string; province?: string } }>();
-          (geo.cities.features || []).forEach((feature: any) => {
+          const cityIndex = new Map<string, GeoFeature>();
+          (geo.cities.features || []).forEach((feature) => {
             const name = normName(feature.properties && feature.properties.name);
             if (name && !cityIndex.has(name)) cityIndex.set(name, feature);
           });
@@ -166,7 +174,7 @@ export default function TravelPage() {
             let provinceName = feature ? feature.properties.province : null;
             if (!provinceName) {
               const province = (geo.provinces.features || []).find(
-                (node: any) => normName(node.properties.name) === normName(item.city),
+                (node) => normName(node.properties.name) === normName(item.city),
               );
               provinceName = province ? province.properties.name : null;
             }
@@ -180,7 +188,7 @@ export default function TravelPage() {
             }
           });
         } else {
-          features.forEach((feature: any) => {
+          features.forEach((feature) => {
             const featureName = feature.properties && feature.properties.name;
             const auto = (stats.cities || []).find(
               (item) => normName(item.city) === normName(featureName),
@@ -189,13 +197,13 @@ export default function TravelPage() {
             visits.forEach((item) => {
               if (item.level === 'city' && item.name === featureName) count += 1;
             });
-            if (count) values.set(featureName, count);
+            if (count && featureName) values.set(featureName, count);
           });
         }
 
-        const data = features.map((feature: any) => {
+        const data = features.map((feature) => {
           const name = feature.properties && feature.properties.name;
-          return { name, value: values.get(name) || 0 };
+          return { name: name || '', value: name ? values.get(name) || 0 : 0 };
         });
         const max = Math.max(1, ...data.map((item: { value: number }) => item.value));
         chart.setOption({

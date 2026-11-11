@@ -5,7 +5,7 @@
  * 途忆 · HTTP 服务（v3.0.0：React 前端 + SPA 路由）
  *
  * 页面：/login、/register 公开；/、/travel、/profile、/onboarding 需登录（未登录 302 到 /login）
- * 旧版页面保留在 /legacy/ 下（过渡期参考，v3.4.0 删除）
+ * 前端：web/dist（React 构建产物），开发模式用 vite dev + /api 代理
  * 接口：
  *   POST /api/verify-code  {account}          模拟验证码（邮箱/手机注册用，正式版换短信/邮件）
  *   POST /api/register  {account,password,code?}   注册并自动登录（用户名无需验证码）
@@ -29,7 +29,6 @@ const path = require('node:path');
 const ROOT = __dirname;
 const WEB_DIR = path.join(ROOT, 'web');
 const WEB_DIST = path.join(WEB_DIR, 'dist');
-const LEGACY_DIR = path.join(WEB_DIR, 'legacy');
 
 // .env 缺失也能启动：只有真正调用模型时才需要密钥（兼容 Node 18）
 require('./brain/env').loadEnv(ROOT);
@@ -41,6 +40,30 @@ const memory = require('./brain/memory');
 const stats = require('./brain/stats');
 const auth = require('./brain/auth');
 const profile = require('./brain/profile');
+
+// ---- 简易限流（v3.4.0）：按 IP 滑动窗口，只对 /api/chat 生效 ----
+const rateCfg = (cfg.server && cfg.server.rate_limit) || {};
+const RATE_WINDOW_MS = Number(rateCfg.window_ms) || 600000;
+const RATE_MAX = rateCfg.max_chat_per_window === undefined ? 30 : Number(rateCfg.max_chat_per_window);
+const rateBuckets = new Map(); // ip -> {windowStart, count}
+function rateCheck(ip) {
+  const now = Date.now();
+  const entry = rateBuckets.get(ip);
+  if (!entry || now - entry.windowStart >= RATE_WINDOW_MS) {
+    rateBuckets.set(ip, { windowStart: now, count: 1 });
+    return true;
+  }
+  entry.count += 1;
+  if (entry.count > RATE_MAX) return false;
+  return true;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateBuckets) {
+    if (now - entry.windowStart >= RATE_WINDOW_MS) rateBuckets.delete(ip);
+  }
+}, Math.min(RATE_WINDOW_MS, 60000)).unref();
+
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -98,20 +121,6 @@ function serveDist(res, urlPath) {
   if (fs.existsSync(abs) && fs.statSync(abs).isFile()) return serveFile(res, abs);
   if (!path.extname(rel)) return serveFile(res, path.join(WEB_DIST, 'index.html'));
   return sendJSON(res, 404, { error: 'not found' });
-}
-
-// 旧版页面（web/legacy，过渡期参考；v3.4.0 随演示信息清理删除）
-function serveLegacy(res, urlPath) {
-  let rel;
-  try {
-    rel = decodeURIComponent(urlPath.split('?')[0]).replace(/^\/legacy\/?/, '').replace(/^\/+/, '');
-  } catch {
-    return sendJSON(res, 400, { error: 'bad url' });
-  }
-  rel = rel || 'index.html';
-  const abs = path.resolve(LEGACY_DIR, rel);
-  if (!abs.startsWith(LEGACY_DIR + path.sep)) return sendJSON(res, 403, { error: 'forbidden' });
-  return serveFile(res, abs);
 }
 
 function readBody(req, limit = 1024 * 1024) {
@@ -220,6 +229,10 @@ async function handleOnboard(req, res) {
 async function handleChat(req, res) {
   const user = currentUser(req);
   if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+  if (!rateCheck(ip)) {
+    return sendJSON(res, 429, { error: '聊得太快啦，小忆需要歇口气，请过几分钟再来' });
+  }
   const body = await readJsonBody(req);
   if (!body) return sendJSON(res, 400, { error: '请求体不是合法 JSON' });
   const message = String(body.message || '').trim();
@@ -419,10 +432,6 @@ const server = http.createServer((req, res) => {
   if (planPath && method === 'DELETE') return handlePlanRemove(req, res, decodeURIComponent(planPath[1]));
   const planStatusPath = pathname.match(/^\/api\/plans\/([^/]+)\/status$/);
   if (planStatusPath && method === 'PUT') return handlePlanStatus(req, res, decodeURIComponent(planStatusPath[1]));
-  if (method === 'GET' && pathname === '/api/stats') {
-    if (!currentUser(req)) return sendJSON(res, 401, { error: '未登录' });
-    return sendJSON(res, 200, stats.computeStats(stats.collectRecords()));
-  }
 
   // 页面
   if (method === 'GET' || method === 'HEAD') {
@@ -436,15 +445,6 @@ const server = http.createServer((req, res) => {
       '/login.html': '/login',
     };
     if (LEGACY_REDIRECTS[pathname]) return redirect(res, LEGACY_REDIRECTS[pathname]);
-
-    // 旧版页面（过渡期参考）
-    if (pathname.startsWith('/legacy')) {
-      if (pathname.endsWith('login.html')) {
-        return user ? redirect(res, '/') : serveLegacy(res, pathname);
-      }
-      if (!user) return redirect(res, '/login');
-      return serveLegacy(res, pathname);
-    }
 
     // 静态资源（登录页也需要）
     if (

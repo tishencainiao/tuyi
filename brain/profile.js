@@ -19,6 +19,7 @@ const PROFILE_DIR = path.join(DATA_DIR, 'user-profile');
 
 const FIELDS = ['nickname', 'age', 'gender', 'companions', 'preferences', 'travel_style', 'health_notes'];
 const GENDERS = ['男', '女', '保密'];
+const PROFILE_SCHEMA = 1; // v3.4.0：资料文件 schema 版本（读时容忍缺失，写时补齐）
 
 function readJSON(file, fallback) {
   try {
@@ -29,6 +30,7 @@ function readJSON(file, fallback) {
 }
 
 function writeJSON(file, value) {
+  value.schemaVersion = PROFILE_SCHEMA; // v3.4.0：写盘时统一打上 schema 版本
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = file + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(value, null, 2), 'utf8');

@@ -38,7 +38,6 @@ function formatDate(value: string) {
 export default function ProfilePage() {
   const { message } = App.useApp();
   const navigate = useNavigate();
-  const user = useApp((state) => state.user);
   const logout = useApp((state) => state.logout);
 
   const [profile, setProfile] = useState<Profile | null>(null);

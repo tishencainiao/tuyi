@@ -21,6 +21,9 @@ const MAX_TURNS = 120;
 const MAX_MEMORIES = 200;
 const MAX_ITINERARIES = 20;
 
+// 记忆文件 schema 版本（v3.4.0）：1=初始，2=行程带 id/status/时间字段
+const CURRENT_SCHEMA = 2;
+
 // 行程状态机（v3.1.0）：生成后是草稿，用户确认后才算数
 const PLAN_STATUS = {
   DRAFT: 'draft',
@@ -56,6 +59,7 @@ function emptyRecord(userId) {
   return {
     userId: sanitizeUserId(userId),
     created: new Date().toISOString(),
+    schemaVersion: CURRENT_SCHEMA,
     turns: [],
     memories: [],
     itineraries: [],
@@ -169,6 +173,11 @@ function ensureItineraryShape(record) {
     }
     if (!itinerary.createdAt) itinerary.createdAt = itinerary.ts || new Date().toISOString();
     if (!itinerary.updatedAt) itinerary.updatedAt = itinerary.createdAt;
+  }
+  // v3.4.0：schema 版本号（历史文件无该字段，补上并落盘；未来迁移按版本写）
+  if (record.schemaVersion !== CURRENT_SCHEMA) {
+    record.schemaVersion = CURRENT_SCHEMA;
+    migrated += 1;
   }
   if (migrated) save(record);
 }
