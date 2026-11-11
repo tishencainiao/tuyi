@@ -366,6 +366,32 @@ body {
   animation: blink 1s step-end infinite;
 }
 
+/* v3.2.0 偏好标签 chip 与验证码行 */
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: 12px;
+}
+
+.code-row {
+  display: flex;
+  gap: 8px;
+}
+
+.code-row .ant-form-item {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.code-row > .ant-btn {
+  flex-shrink: 0;
+}
+
 @keyframes blink {
   50% {
     opacity: 0;

@@ -4,13 +4,16 @@
 /**
  * 途忆 · HTTP 服务（v3.0.0：React 前端 + SPA 路由）
  *
- * 页面：/login、/register 公开；/、/travel、/profile 需登录（未登录 302 到 /login）
+ * 页面：/login、/register 公开；/、/travel、/profile、/onboarding 需登录（未登录 302 到 /login）
  * 旧版页面保留在 /legacy/ 下（过渡期参考，v3.4.0 删除）
  * 接口：
- *   POST /api/register  {username,password}   注册并自动登录
- *   POST /api/login     {username,password}   登录（httpOnly cookie）
+ *   POST /api/verify-code  {account}          模拟验证码（邮箱/手机注册用，正式版换短信/邮件）
+ *   POST /api/register  {account,password,code?}   注册并自动登录（用户名无需验证码）
+ *   POST /api/login     {account,password}     登录（httpOnly cookie）
  *   POST /api/logout                          退出
- *   GET  /api/me                              当前用户
+ *   GET  /api/me                              当前用户（含 onboarded 引导标记）
+ *   GET  /api/userinfo / PUT /api/userinfo    个人资料（昵称/年龄/性别/同行人/偏好等）
+ *   POST /api/onboard                         完成注册引导（写入资料并标记 onboarded）
  *   POST /api/chat      {message,conversationId?}  SSE 流式对话（userId 从 session 取）
  *   GET  /api/history   ?conversationId=      会话历史
  *   GET  /api/profile                         本人画像 / 记忆 / 行程
@@ -37,6 +40,7 @@ const tools = require('./brain/tools');
 const memory = require('./brain/memory');
 const stats = require('./brain/stats');
 const auth = require('./brain/auth');
+const profile = require('./brain/profile');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -140,10 +144,19 @@ function currentUser(req) {
   return session ? session.user : null;
 }
 
+async function handleVerifyCode(req, res) {
+  const body = await readJsonBody(req);
+  if (!body) return sendJSON(res, 400, { error: '请求体不是合法 JSON' });
+  const result = auth.issueVerifyCode(body.account);
+  if (!result.ok) return sendJSON(res, 400, { error: result.error });
+  // 模拟验证码：正式环境由短信 / 邮件下发，这里直接在响应里返回（演示用）
+  return sendJSON(res, 200, { ok: true, mock: true, mockCode: result.mockCode, expiresInSec: result.expiresInSec });
+}
+
 async function handleRegister(req, res) {
   const body = await readJsonBody(req);
   if (!body) return sendJSON(res, 400, { error: '请求体不是合法 JSON' });
-  const result = auth.createUser(body.username, body.password);
+  const result = auth.createUser(body.account, body.password, { username: body.username, code: body.code });
   if (!result.ok) return sendJSON(res, 400, { error: result.error });
   const token = auth.createSession(result.userId);
   res.setHeader('Set-Cookie', auth.sessionCookie(token));
@@ -153,7 +166,7 @@ async function handleRegister(req, res) {
 async function handleLogin(req, res) {
   const body = await readJsonBody(req);
   if (!body) return sendJSON(res, 400, { error: '请求体不是合法 JSON' });
-  const result = auth.verifyLogin(body.username, body.password);
+  const result = auth.verifyLogin(body.account != null ? body.account : body.username, body.password);
   if (!result.ok) return sendJSON(res, 400, { error: result.error });
   const token = auth.createSession(result.userId);
   res.setHeader('Set-Cookie', auth.sessionCookie(token));
@@ -171,6 +184,35 @@ function handleMe(req, res) {
   const user = currentUser(req);
   if (!user) return sendJSON(res, 401, { error: '未登录' });
   return sendJSON(res, 200, { user });
+}
+
+function handleUserinfoGet(req, res) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  return sendJSON(res, 200, {
+    user: { userId: user.userId, username: user.username, email: user.email, phone: user.phone, onboarded: user.onboarded },
+    profile: profile.getProfile(user.userId),
+  });
+}
+
+async function handleUserinfoPut(req, res) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const body = await readJsonBody(req);
+  if (!body) return sendJSON(res, 400, { error: '请求体不是合法 JSON' });
+  const result = profile.updateProfile(user.userId, body);
+  if (!result.ok) return sendJSON(res, 400, { error: result.error });
+  return sendJSON(res, 200, { ok: true, profile: result.profile });
+}
+
+async function handleOnboard(req, res) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const body = await readJsonBody(req);
+  const result = profile.updateProfile(user.userId, body || {});
+  if (!result.ok) return sendJSON(res, 400, { error: result.error });
+  auth.markOnboarded(user.userId);
+  return sendJSON(res, 200, { ok: true, profile: result.profile });
 }
 
 async function handleChat(req, res) {
@@ -346,10 +388,14 @@ const server = http.createServer((req, res) => {
   const pathname = url.pathname;
 
   // 接口
+  if (method === 'POST' && pathname === '/api/verify-code') return handleVerifyCode(req, res);
   if (method === 'POST' && pathname === '/api/register') return handleRegister(req, res);
   if (method === 'POST' && pathname === '/api/login') return handleLogin(req, res);
   if (method === 'POST' && pathname === '/api/logout') return handleLogout(req, res);
   if (method === 'GET' && pathname === '/api/me') return handleMe(req, res);
+  if (method === 'GET' && pathname === '/api/userinfo') return handleUserinfoGet(req, res);
+  if (method === 'PUT' && pathname === '/api/userinfo') return handleUserinfoPut(req, res);
+  if (method === 'POST' && pathname === '/api/onboard') return handleOnboard(req, res);
   if (method === 'GET' && pathname === '/api/health') return sendJSON(res, 200, health());
   if (method === 'POST' && pathname === '/api/chat') return handleChat(req, res);
   if (method === 'GET' && pathname === '/api/history') return handleHistory(url, req, res);

@@ -11,12 +11,12 @@ export default function LoginPage() {
   const setUser = useApp((state) => state.setUser);
   const [loading, setLoading] = useState(false);
 
-  const onFinish = async (values: { username: string; password: string }) => {
+  const onFinish = async (values: { account: string; password: string }) => {
     setLoading(true);
     try {
-      const data = await api.login(values.username.trim(), values.password);
+      const data = await api.login(values.account.trim(), values.password);
       setUser(data.user);
-      message.success('欢迎回来，' + data.user.username);
+      message.success('欢迎回来，' + (data.user.username || '旅行家'));
       navigate('/', { replace: true });
     } catch (err) {
       message.error(err instanceof ApiError ? err.message : '登录失败，请稍后重试');
@@ -35,11 +35,11 @@ export default function LoginPage() {
         </div>
         <Form layout="vertical" onFinish={onFinish} autoComplete="off">
           <Form.Item
-            name="username"
-            label="用户名"
-            rules={[{ required: true, message: '请输入用户名' }]}
+            name="account"
+            label="账号"
+            rules={[{ required: true, message: '请输入用户名 / 邮箱 / 手机号' }]}
           >
-            <Input prefix={<UserOutlined />} placeholder="2~20 个字符" maxLength={20} />
+            <Input prefix={<UserOutlined />} placeholder="用户名 / 邮箱 / 手机号" maxLength={64} />
           </Form.Item>
           <Form.Item
             name="password"

@@ -412,6 +412,86 @@ const sample = {
     }
   });
 
+  await check('账号：账号类型识别（用户名 / 邮箱 / 手机）', () => {
+    const auth = require('../brain/auth');
+    assert.strictEqual(auth.classifyAccount('xiaoyi').type, 'username');
+    assert.strictEqual(auth.classifyAccount('test@qq.com').type, 'email');
+    assert.strictEqual(auth.classifyAccount('13800138000').type, 'phone');
+    assert.strictEqual(auth.classifyAccount('a'), null);
+    assert.strictEqual(auth.classifyAccount(''), null);
+  });
+
+  await check('账号：邮箱注册需要验证码（错码拒绝 / 对码通过 / 重复注册拒绝）', () => {
+    const auth = require('../brain/auth');
+    const issue = auth.issueVerifyCode('tuyi-v32@test.com');
+    assert.strictEqual(issue.ok, true);
+    assert.ok(/^\d{6}$/.test(issue.mockCode));
+    const bad = auth.createUser('tuyi-v32@test.com', '123456', { code: '000000' });
+    assert.strictEqual(bad.ok, false);
+    assert.ok(bad.error.includes('验证码'));
+    const good = auth.createUser('tuyi-v32@test.com', '123456', { code: issue.mockCode });
+    assert.strictEqual(good.ok, true);
+    assert.ok(good.userId.startsWith('u-'));
+    const again = auth.issueVerifyCode('tuyi-v32@test.com');
+    const dup = auth.createUser('tuyi-v32@test.com', '123456', { code: again.mockCode });
+    assert.strictEqual(dup.ok, false);
+    assert.ok(dup.error.includes('已注册'));
+  });
+
+  await check('账号：用户名注册免验证码 + 邮箱登录 + 密码校验', () => {
+    const auth = require('../brain/auth');
+    const created = auth.createUser('smokeuser32', '123456');
+    assert.strictEqual(created.ok, true);
+    assert.strictEqual(auth.verifyLogin('smokeuser32', '123456').ok, true);
+    assert.strictEqual(auth.verifyLogin('tuyi-v32@test.com', '123456').ok, true);
+    assert.strictEqual(auth.verifyLogin('smokeuser32', 'badbad').ok, false);
+  });
+
+  await check('账号：onboarded 引导标记可写可读', () => {
+    const auth = require('../brain/auth');
+    const created = auth.createUser('smokeonboard', '123456');
+    assert.strictEqual(created.ok, true);
+    assert.strictEqual(auth.getUserById(created.userId).onboarded, false);
+    auth.markOnboarded(created.userId);
+    assert.strictEqual(auth.getUserById(created.userId).onboarded, true);
+  });
+
+  await check('资料：更新校验（年龄 / 性别 / 同行人 / 未知字段忽略）', () => {
+    const profile = require('../brain/profile');
+    const userId = 'smoke-profile';
+    const first = profile.updateProfile(userId, {
+      nickname: '小忆测试', age: 25, gender: '女',
+      companions: [{ name: '妈妈', relation: '妈妈', age: 50 }, { name: '', relation: '' }],
+      preferences: ['拍照', '美食', '拍照'],
+      travel_style: '松弛',
+      health_notes: '膝盖不好，少爬楼梯',
+      hacker: '忽略我',
+    });
+    assert.strictEqual(first.ok, true);
+    const saved = profile.getProfile(userId);
+    assert.strictEqual(saved.nickname, '小忆测试');
+    assert.strictEqual(saved.companions.length, 1);
+    assert.strictEqual(saved.companions[0].name, '妈妈');
+    assert.strictEqual(saved.preferences.length, 2);
+    assert.strictEqual(saved.sources.nickname, 'confirmed');
+    assert.strictEqual(saved.hacker, undefined);
+    assert.strictEqual(profile.updateProfile(userId, { age: 500 }).ok, false);
+    assert.strictEqual(profile.updateProfile(userId, { gender: '外星人' }).ok, false);
+    assert.strictEqual(profile.updateProfile(userId, { companions: '不是数组' }).ok, false);
+  });
+
+  await check('资料：提示块渲染（有值才注入）', () => {
+    const profile = require('../brain/profile');
+    const empty = profile.renderProfileBlock(profile.emptyProfile('x'));
+    assert.strictEqual(empty, '');
+    const block = profile.renderProfileBlock({
+      nickname: '小林', age: 24, companions: [{ name: '妈妈', relation: '妈妈', age: 52 }], preferences: ['美食'],
+    });
+    assert.ok(block.includes('【用户资料】'));
+    assert.ok(block.includes('妈妈（52 岁）'));
+    assert.ok(block.includes('美食'));
+  });
+
   console.log('\n冒烟测试：' + passed + ' 通过 / ' + failed + ' 失败');
   if (failed) process.exitCode = 1;
 })();

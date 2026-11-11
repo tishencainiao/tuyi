@@ -5,9 +5,18 @@ import { LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import { useApp } from './store';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import OnboardingPage from './pages/OnboardingPage';
 import ChatPage from './pages/ChatPage';
 import TravelPage from './pages/TravelPage';
 import ProfilePage from './pages/ProfilePage';
+
+function displayName(user: { username?: string; email?: string; phone?: string } | null) {
+  if (!user) return '我';
+  if (user.username) return user.username;
+  if (user.email) return user.email.split('@')[0];
+  if (user.phone) return user.phone.slice(0, 3) + '****' + user.phone.slice(7);
+  return '我';
+}
 
 function AppShell({ children }: { children: ReactNode }) {
   const user = useApp((state) => state.user);
@@ -50,7 +59,7 @@ function AppShell({ children }: { children: ReactNode }) {
         >
           <a style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <Avatar size={28} style={{ background: '#0ea5e9' }} icon={<UserOutlined />} />
-            <span style={{ fontSize: 14 }}>{user?.username || '我'}</span>
+            <span style={{ fontSize: 14 }}>{displayName(user)}</span>
           </a>
         </Dropdown>
       </header>
@@ -84,6 +93,14 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route
+        path="/onboarding"
+        element={
+          <Protected>
+            <OnboardingPage />
+          </Protected>
+        }
+      />
       <Route
         path="/"
         element={

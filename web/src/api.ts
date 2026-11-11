@@ -4,6 +4,33 @@
 export interface User {
   userId: string;
   username: string;
+  email?: string;
+  phone?: string;
+  onboarded?: boolean;
+}
+
+// v3.2.0 个人资料（与 brain/profile.js 契约一致）
+export interface Companion {
+  name: string;
+  relation: string;
+  age: number | null;
+}
+
+export interface UserInfo {
+  nickname: string;
+  age: number | null;
+  gender: string;
+  companions: Companion[];
+  preferences: string[];
+  travel_style: string;
+  health_notes: string;
+  sources: Record<string, string>;
+  updatedAt: string | null;
+}
+
+export interface UserInfoResponse {
+  user: User;
+  profile: UserInfo;
 }
 
 export interface Turn {
@@ -146,19 +173,40 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 export const api = {
   me: () => request<{ user: User }>('/api/me'),
-  register: (username: string, password: string) =>
+  // v3.2.0：账号支持 用户名 / 邮箱 / 手机号；邮箱手机注册需先 verifyCode
+  verifyCode: (account: string) =>
+    request<{ ok: boolean; mock: boolean; mockCode: string; expiresInSec: number }>('/api/verify-code', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ account }),
+    }),
+  register: (account: string, password: string, code?: string) =>
     request<{ user: User }>('/api/register', {
       method: 'POST',
       headers: JSON_HEADERS,
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ account, password, code }),
     }),
-  login: (username: string, password: string) =>
+  login: (account: string, password: string) =>
     request<{ user: User }>('/api/login', {
       method: 'POST',
       headers: JSON_HEADERS,
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ account, password }),
     }),
   logout: () => request<{ ok: boolean }>('/api/logout', { method: 'POST' }),
+
+  userinfo: () => request<UserInfoResponse>('/api/userinfo'),
+  updateUserinfo: (patch: Partial<UserInfo>) =>
+    request<{ ok: boolean; profile: UserInfo }>('/api/userinfo', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(patch),
+    }),
+  onboard: (patch: Partial<UserInfo>) =>
+    request<{ ok: boolean; profile: UserInfo }>('/api/onboard', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(patch),
+    }),
 
   history: (conversationId: string, limit = 40) =>
     request<{ conversationId: string; turns: Turn[] }>(

@@ -240,3 +240,12 @@
 - 新接口：`GET /api/plans`、`PUT /api/plans/:id/status`、`DELETE /api/plans/:id`（仅草稿可删）。
 - 前端：PlanCard 状态/操作/详情、聊天页历史+行程卡片按时间线恢复、个人中心行程操作、我的旅行草稿提示。
 - 测试：smoke 26 项（含状态机用例，TUYI_DATA_DIR 隔离）；真实 LLM 端到端验证「生成→草稿→确认→统计→雨天改室内→同一方案第 2 版」全链路通过。
+
+### v3.2.0（2026-11-11）
+- 注册三种方式：用户名（免验码）/ 邮箱 / 手机号（模拟验证码：内存 5 分钟 TTL、一次性，演示环境接口直接返回 mockCode，正式版改短信 / 邮件下发）；登录统一「账号」输入框（三字段任一匹配）。
+- 引导页 `/onboarding`（注册后进入，可跳过）：称呼 / 年龄 / 性别 / 同行人（关系·称呼·年龄，可多条）/ 偏好标签（回车添加）/ 旅行风格 / 健康备注。
+- 个人资料：`brain/profile.js` 新模块（data/user-profile/<userId>.json，白名单校验，sources 来源标记）；资料经 `renderProfileBlock` 注入 system 提示词（【用户资料】块），persona 增加用法规则（老人小孩放慢节奏；不盘问；新资料走 memory_edit）。
+- 接口：`POST /api/verify-code`、`GET/PUT /api/userinfo`、`POST /api/onboard`；注册 / 登录兼容旧 `username` 参数。
+- 前端：RegisterPage 三 Tab（验证码倒计时 60s + 绿色提示条显示模拟验证码）、OnboardingPage、ProfileForm 复用组件（引导页与个人中心共用）、个人中心「个人资料」卡（查看 + 编辑弹窗）、登录页提示语更新。
+- 测试：smoke 32 项；浏览器全流程验证（邮箱注册→引导页填写→个人中心编辑→邮箱登录）；真实 LLM 验证资料注入（给 test1 填「外婆 68 岁、松弛、美食拍照」后发杭州行程请求，回复主动按 2 人（含外婆）算预算、安排游船免走路并说明节奏）。
+- 修复：ProfileForm 偏好标签输入框被 Form.Item 注入 value/onChange 覆盖 → 输入导致表单字段变字符串、渲染崩溃；改为标签输入框脱离 Form.Item（仅 setFieldValue 维护）+ 隐藏字段存储。

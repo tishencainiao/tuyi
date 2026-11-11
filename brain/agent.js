@@ -12,6 +12,7 @@ const path = require('node:path');
 const { chatStream } = require('./llm');
 const tools = require('./tools');
 const memory = require('./memory');
+const profile = require('./profile');
 
 const PROMPT_DIR = path.join(__dirname, 'prompts');
 const promptCache = new Map();
@@ -50,8 +51,14 @@ async function* runAgent({ cfg, userId, userText, conversationId = 'default' }) 
       }))
     : [];
 
+  // v3.2.0：用户资料注入（注册引导页 / 个人中心填写的资料，排行程时参考）
+  const profileBlock = profile.renderProfileBlock(profile.getProfile(userId));
+
   const messages = [
-    { role: 'system', content: loadPrompt('persona.md') + (memoryBlock ? '\n\n' + memoryBlock : '') },
+    {
+      role: 'system',
+      content: loadPrompt('persona.md') + (profileBlock ? '\n\n' + profileBlock : '') + (memoryBlock ? '\n\n' + memoryBlock : ''),
+    },
     ...history,
     { role: 'user', content: userText },
   ];
