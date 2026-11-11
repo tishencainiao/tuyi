@@ -19,18 +19,39 @@ export interface MemoryItem {
   tags: string[];
 }
 
-export interface ItineraryDay {
-  title: string;
-  items: string[];
+export interface ItineraryItem {
+  time: string;
+  place: string;
+  activity: string;
+  transport: string;
+  cost_cny: number;
 }
 
+export interface ItineraryDay {
+  date: string;
+  title: string;
+  items: ItineraryItem[];
+}
+
+export type PlanStatus = 'draft' | 'confirmed' | 'in_progress' | 'completed';
+
 export interface Itinerary {
+  id?: string;
   ts: string;
   title: string;
   destination: string;
   budget_cny: number;
   days: ItineraryDay[];
-  status?: 'draft' | 'confirmed' | 'in_progress' | 'completed'; // v3.1.0 行程生命周期
+  previousDays?: ItineraryDay[];
+  status?: PlanStatus; // v3.1.0 行程生命周期
+  revisions?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Plan extends Itinerary {
+  id: string;
+  status: PlanStatus;
 }
 
 export interface Insights {
@@ -63,6 +84,7 @@ export interface TagStat {
 
 export interface PersonalStats {
   tripCount: number;
+  draftCount: number;
   cityCount: number;
   totalDays: number;
   totalBudget: number;
@@ -73,11 +95,13 @@ export interface PersonalStats {
   turnsCount: number;
   hasInsights: boolean;
   recentTrips: Array<{
+    id: string;
     ts: string;
     title: string;
     destination: string;
     days: number;
     budget_cny: number;
+    status: PlanStatus;
   }>;
 }
 
@@ -155,6 +179,17 @@ export const api = {
       '/api/visits?name=' + encodeURIComponent(name) + '&level=' + encodeURIComponent(level),
       { method: 'DELETE' },
     ),
+
+  // v3.1.0 行程方案状态机
+  plans: () => request<{ plans: Plan[] }>('/api/plans'),
+  setPlanStatus: (id: string, status: PlanStatus) =>
+    request<{ ok: boolean; itinerary: Plan }>('/api/plans/' + encodeURIComponent(id) + '/status', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ status }),
+    }),
+  removePlan: (id: string) =>
+    request<{ ok: boolean }>('/api/plans/' + encodeURIComponent(id), { method: 'DELETE' }),
 
   createMemory: (text: string, tags: string[]) =>
     request<{ ok: boolean }>('/api/memory', {

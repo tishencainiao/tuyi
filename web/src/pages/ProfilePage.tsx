@@ -6,7 +6,6 @@ import {
   Button,
   Card,
   Col,
-  Collapse,
   Descriptions,
   Empty,
   Form,
@@ -27,7 +26,7 @@ import {
   PlusOutlined,
   UserOutlined,
 } from '@ant-design/icons';
-import { api, ApiError, MemoryItem, Profile } from '../api';
+import { api, ApiError, MemoryItem, PlanStatus, Profile } from '../api';
 import { useApp } from '../store';
 import PlanCard from '../components/PlanCard';
 
@@ -131,6 +130,29 @@ export default function ProfilePage() {
     navigate('/login', { replace: true });
   };
 
+  // v3.1.0：行程状态操作（与聊天页一致）
+  const handleStatus = async (itinerary: Profile['itineraries'][number], status: PlanStatus) => {
+    if (!itinerary.id) return;
+    try {
+      await api.setPlanStatus(itinerary.id, status);
+      message.success(status === 'confirmed' ? '已确认，城市已点亮到地图' : status === 'in_progress' ? '已标记为进行中' : '已完成');
+      load();
+    } catch (err) {
+      message.error(err instanceof ApiError ? err.message : '更新失败');
+    }
+  };
+
+  const handleDelete = async (itinerary: Profile['itineraries'][number]) => {
+    if (!itinerary.id) return;
+    try {
+      await api.removePlan(itinerary.id);
+      message.success('草稿已删除');
+      load();
+    } catch (err) {
+      message.error(err instanceof ApiError ? err.message : '删除失败');
+    }
+  };
+
   if (loading) {
     return (
       <div className="page" style={{ textAlign: 'center', paddingTop: 64 }}>
@@ -192,21 +214,16 @@ export default function ProfilePage() {
         <Col xs={24} md={15}>
           <Card title={'我的行程（最近 ' + profile.itineraries.length + ' 条）'} size="small">
             {profile.itineraries.length ? (
-              <Collapse
-                items={profile.itineraries.map((itinerary, index) => ({
-                  key: String(index),
-                  label: (
-                    <span>
-                      {itinerary.title || '旅行方案'}
-                      <span className="muted" style={{ marginLeft: 8 }}>
-                        {itinerary.destination} · {itinerary.days.length} 天 ·{' '}
-                        {formatDate(itinerary.ts)}
-                      </span>
-                    </span>
-                  ),
-                  children: <PlanCard itinerary={itinerary} />,
-                }))}
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {profile.itineraries.map((itinerary) => (
+                  <PlanCard
+                    itinerary={itinerary}
+                    key={itinerary.id || itinerary.ts}
+                    onStatus={handleStatus}
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </div>
             ) : (
               <Empty description="还没有生成过行程方案。">
                 <Button type="primary" onClick={() => navigate('/')}>

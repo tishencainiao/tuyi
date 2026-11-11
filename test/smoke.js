@@ -2,7 +2,13 @@
 
 /**
  * 冒烟测试（不联网）：node test/smoke.js
+ * v3.1.0：使用临时数据目录（TUYI_DATA_DIR），不污染真实 data/memory。
  */
+
+const os = require('node:os');
+const path = require('node:path');
+const fs = require('node:fs');
+process.env.TUYI_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'tuyi-smoke-'));
 
 const assert = require('node:assert');
 const { buildEndpoint } = require('../brain/llm');
@@ -169,12 +175,74 @@ const sample = {
     assert.strictEqual(record.state.memoriesSinceDigest, 0);
   });
 
-  await check('记忆：行程入库', () => {
+  await check('记忆：行程入库（v3.1.0 状态机）', () => {
     const memory = require('../brain/memory');
     const record = memory.emptyRecord('smoke-trip');
-    memory.appendItinerary(record, { destination: '成都', title: '成都三天', budget_cny: 3000, days: [{}, {}] });
-    assert.strictEqual(record.itineraries.length, 1);
-    assert.strictEqual(record.itineraries[0].destination, '成都');
+    const created = memory.upsertItinerary(record.userId, { destination: '成都', title: '成都三天', budget_cny: 3000, days: [{}, {}] }, { mode: 'create' });
+    assert.strictEqual(created.ok, true);
+    assert.strictEqual(created.created, true);
+    assert.ok(created.itinerary.id, 'create 应生成 plan_id');
+    assert.strictEqual(created.itinerary.status, 'draft');
+
+    const reloaded = memory.load(record.userId);
+    assert.strictEqual(reloaded.itineraries.length, 1);
+    assert.strictEqual(reloaded.itineraries[0].destination, '成都');
+  });
+
+  await check('记忆：行程状态机流转', () => {
+    const memory = require('../brain/memory');
+    const record = memory.emptyRecord('smoke-status');
+    const created = memory.upsertItinerary(record.userId, { destination: '成都', days: [{}] }, { mode: 'create' });
+    const planId = created.itinerary.id;
+
+    const s1 = memory.setItineraryStatus(record.userId, planId, 'confirmed');
+    assert.strictEqual(s1.ok, true);
+    const s2 = memory.setItineraryStatus(record.userId, planId, 'in_progress');
+    assert.strictEqual(s2.ok, true);
+    const s3 = memory.setItineraryStatus(record.userId, planId, 'completed');
+    assert.strictEqual(s3.ok, true);
+    const back = memory.setItineraryStatus(record.userId, planId, 'draft');
+    assert.strictEqual(back.ok, false, 'completed 不能退回 draft');
+
+    const bad = memory.setItineraryStatus(record.userId, planId, 'flying');
+    assert.strictEqual(bad.ok, false, '非法状态应拒绝');
+    assert.strictEqual(memory.getPlan(record.userId, planId).status, 'completed');
+  });
+
+  await check('记忆：连续修改同一方案', () => {
+    const memory = require('../brain/memory');
+    const record = memory.emptyRecord('smoke-revise');
+    const created = memory.upsertItinerary(record.userId, { destination: '云南', days: [{ date: '第 1 天', items: [] }] }, { mode: 'create' });
+    const planId = created.itinerary.id;
+
+    const updated = memory.upsertItinerary(record.userId, {
+      id: planId,
+      destination: '云南',
+      title: '云南改期版',
+      days: [{ date: '第 2 天', items: [] }],
+    }, { mode: 'update', planId });
+    assert.strictEqual(updated.ok, true);
+    assert.strictEqual(updated.updated, true);
+    assert.strictEqual(updated.itinerary.id, planId, '修改后仍是同一 plan_id');
+    assert.strictEqual(updated.itinerary.revisions, 1);
+    assert.strictEqual(updated.itinerary.days.length, 1);
+    assert.strictEqual(updated.itinerary.previousDays.length, 1, '旧天数进入 previousDays');
+
+    const list = memory.listPlans(record.userId);
+    assert.strictEqual(list.length, 1, '修改不产生新方案');
+  });
+
+  await check('统计：仅统计非草稿行程', () => {
+    const stats = require('../brain/stats');
+    const memory = require('../brain/memory');
+    const record = memory.emptyRecord('smoke-draftstats');
+    memory.upsertItinerary(record.userId, { destination: '成都', budget_cny: 3000, days: [{ items: [] }] }, { mode: 'create' });
+    const confirmed = memory.upsertItinerary(record.userId, { destination: '成都', budget_cny: 4000, days: [{ items: [] }] }, { mode: 'create' });
+    memory.setItineraryStatus(record.userId, confirmed.itinerary.id, 'confirmed');
+    const result = stats.computePersonalStats(memory.load(record.userId));
+    assert.strictEqual(result.tripCount, 1, '草稿不计入旅行次数');
+    assert.strictEqual(result.draftCount, 1);
+    assert.strictEqual(result.totalBudget, 4000, '预算只统计已确认行程');
   });
 
   await check('统计：意图分类与预算分档', () => {
@@ -256,8 +324,8 @@ const sample = {
     const memory = require('../brain/memory');
     const record = memory.emptyRecord('tl-user');
     record.itineraries.push(
-      { ts: '2026-10-01T00:00:00Z', destination: '成都', days: [{}, {}], budget_cny: 3000 },
-      { ts: '2026-11-01T00:00:00Z', destination: '西安', days: [{}], budget_cny: 1500 },
+      { ts: '2026-10-01T00:00:00Z', destination: '成都', days: [{}, {}], budget_cny: 3000, status: 'completed' },
+      { ts: '2026-11-01T00:00:00Z', destination: '西安', days: [{}], budget_cny: 1500, status: 'completed' },
     );
     const block = memory.renderBlock(record, '我第一次去哪了');
     assert.match(block, /行程时间线/);
@@ -311,8 +379,8 @@ const sample = {
       memories: [{ text: '带父母去成都，预算中等', tags: ['带父母'] }],
       insights: { summary: 's', tags: ['慢节奏'] },
       itineraries: [
-        { ts: '2026-09-10T00:00:00Z', destination: '成都', budget_cny: 3000, days: [{}, {}] },
-        { ts: '2026-11-01T00:00:00Z', destination: '成都市', budget_cny: 4000, days: [{}, {}, {}] },
+        { ts: '2026-09-10T00:00:00Z', destination: '成都', budget_cny: 3000, days: [{}, {}], status: 'completed' },
+        { ts: '2026-11-01T00:00:00Z', destination: '成都市', budget_cny: 4000, days: [{}, {}, {}], status: 'completed' },
       ],
       turns: [{ role: 'user', text: '你好' }],
     };

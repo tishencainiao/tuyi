@@ -223,3 +223,20 @@
 
 【统一后缀（追加到每个动作提示词后）】
 > 同一角色同一画风：白色云朵身体、浅蓝色点缀、斜挎小旅行包，纯色浅背景，无文字
+
+## 11. 实施记录
+
+### v3.0.0（已完成，2026-11-11，提交 6f7ac20）
+- Vite + React 18 + TS + AntD 5 + zustand + ECharts + react-router；`web/dist` 由 server.js 托管，SPA 回退；旧页面移 `web/legacy/`（v3.4.0 删）。
+- 页面：登录 / 注册 / 聊天（SSE 流式+工具过程 Tag+行程卡片+历史恢复）/ 我的旅行（KPI+柱状图+省/市地图点亮+足迹表）/ 个人中心（画像+记忆增删改+行程列表）。
+- 演示数据清理：备份 `backups/`、删 `scripts/seed-demo.js`、删 `demo-*` 数据、README 同步。
+- 设计系统见 docs/design.md（天蓝 #0EA5E9 + 暖橙 #FB923C）。
+- 遗留（后续版本处理）：Markdown 渲染（v3.3.0）、代码分割与 ESLint（v3.4.0）、GitHub 补推。
+
+### v3.1.0（已完成，2026-11-11）
+- 行程状态机：`draft → confirmed → in_progress → completed`；生成默认草稿，确认后计入去过城市/点亮地图；旧行程自动迁移为草稿。
+- 连续修改：`get_plan` 读当前方案 → `plan_trip(mode:update)` 同 plan_id 原地改，只重排未进行的天，历史版本进 `previousDays`（可展开），revision 计数。
+- 新工具：`get_plan`、`update_plan_status`；persona 新增「行程的生命周期」规则。
+- 新接口：`GET /api/plans`、`PUT /api/plans/:id/status`、`DELETE /api/plans/:id`（仅草稿可删）。
+- 前端：PlanCard 状态/操作/详情、聊天页历史+行程卡片按时间线恢复、个人中心行程操作、我的旅行草稿提示。
+- 测试：smoke 26 项（含状态机用例，TUYI_DATA_DIR 隔离）；真实 LLM 端到端验证「生成→草稿→确认→统计→雨天改室内→同一方案第 2 版」全链路通过。

@@ -24,6 +24,7 @@ record.itineraries.push(
     destination: '云南',
     budget_cny: 5000,
     days: [{}, {}, {}, {}, {}],
+    status: 'completed',
   },
   {
     ts: '2026-11-01T00:00:00Z',
@@ -31,6 +32,7 @@ record.itineraries.push(
     destination: '成都',
     budget_cny: 3000,
     days: [{}, {}, {}],
+    status: 'completed',
   },
 );
 memory.save(record);

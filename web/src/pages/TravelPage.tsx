@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { App, Button, Card, Col, Empty, Row, Segmented, Spin, Statistic, Table, Tag } from 'antd';
+import { Alert, App, Button, Card, Col, Empty, Row, Segmented, Spin, Statistic, Table, Tag } from 'antd';
 import * as echarts from 'echarts';
 import { api, ApiError, PersonalStats, Visit } from '../api';
 
@@ -260,7 +260,7 @@ export default function TravelPage() {
     },
   ];
 
-  const isEmpty = stats.tripCount === 0 && visits.length === 0;
+  const isEmpty = stats.tripCount === 0 && visits.length === 0 && (stats.draftCount || 0) === 0;
 
   return (
     <div className="page">
@@ -274,6 +274,23 @@ export default function TravelPage() {
         </Card>
       ) : (
         <>
+          {(stats.draftCount || 0) > 0 ? (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={
+                '你有 ' +
+                stats.draftCount +
+                ' 份行程草稿还没确认，确认后才会计入旅行次数并点亮地图。'
+              }
+              action={
+                <Button size="small" type="primary" onClick={() => navigate('/profile')}>
+                  去确认
+                </Button>
+              }
+            />
+          ) : null}
           <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
             <Col xs={12} md={8} lg={4}>
               <Card className="kpi-card" size="small">

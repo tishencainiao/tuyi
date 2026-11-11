@@ -113,8 +113,25 @@ async function* runAgent({ cfg, userId, userText, conversationId = 'default' }) 
       }
       yield { type: 'tool_result', name: call.name, ok: result.ok !== false };
       if (result && result.itinerary) {
-        lastItinerary = result.itinerary;
-        yield { type: 'itinerary', value: result.itinerary };
+        // v3.1.0：行程落库在工具循环里直接完成（而非收尾 rememberTurn），
+        // 前端拿到的 itinerary 事件带 id/status，可原地渲染「草稿待确认」卡片。
+        if (memoryEnabled && result.itinerary.mode) {
+          const stored = memory.upsertItinerary(userId, result.itinerary, {
+            mode: result.itinerary.mode,
+            planId: result.itinerary.id,
+          });
+          if (stored && stored.ok && stored.itinerary) {
+            result.itinerary = stored.itinerary;
+            lastItinerary = stored.itinerary;
+            yield { type: 'itinerary', value: stored.itinerary };
+          } else {
+            lastItinerary = result.itinerary;
+            yield { type: 'itinerary', value: result.itinerary };
+          }
+        } else {
+          lastItinerary = result.itinerary;
+          yield { type: 'itinerary', value: result.itinerary };
+        }
       }
       messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
     }

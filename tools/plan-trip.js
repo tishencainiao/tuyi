@@ -5,25 +5,37 @@
  * 设计意图（论文「防幻觉」章节素材）：让模型把行程落到固定 schema，
  * 缺时间 / 地点 / 活动的项会被标记 warning，前端只渲染结构化数据，
  * 避免大段自由文本无法核对。
+ * v3.1.0：mode=update 时按 plan_id 修改已有方案（连续修改，同一份方案），
+ * 已过去的天由模型决定不重排（配合 persona 规则与 get_plan）。
  */
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const memory = require('../brain/memory');
 
 const def = {
   type: 'function',
   function: {
     name: 'plan_trip',
     description:
-      '把一份完整旅游行程整理成结构化 JSON 并校验（每天含时间、地点、活动、交通、花费）。当用户需要完整行程时调用本工具，不要只在聊天里写文字。',
+      '把一份完整旅游行程整理成结构化 JSON 并校验（每天含时间、地点、活动、交通、花费）。当用户需要完整行程时调用本工具，不要只在聊天里写文字。修改已有方案时传 mode:"update" 和 plan_id（先用 get_plan 拿到），返回同一方案的新版本。',
     parameters: {
       type: 'object',
       properties: {
+        mode: {
+          type: 'string',
+          enum: ['create', 'update'],
+          description: 'create=新建方案（默认）；update=在已有方案上修改（连续修改，不新建）',
+        },
+        plan_id: {
+          type: 'string',
+          description: 'mode=update 时必填：要修改的已有方案 id（来自 get_plan）',
+        },
         title: { type: 'string', description: '行程标题，如「成都三天两晚」' },
         destination: { type: 'string', description: '目的地城市' },
         budget_cny: { type: 'number', description: '全程预算估算（人民币）' },
         days: {
           type: 'array',
-          description: '按天排列的行程',
+          description: '按天排列的行程（mode=update 时只给「还没进行的后续天」，已经过去的天不要重排）',
           items: {
             type: 'object',
             properties: {
@@ -58,12 +70,33 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function run(args) {
+function run(args, context) {
   const warnings = [];
   const destination = String(args.destination || '').trim();
   if (!destination) return { ok: false, error: 'destination 不能为空' };
   if (!Array.isArray(args.days) || args.days.length === 0) {
     return { ok: false, error: 'days 不能为空' };
+  }
+
+  // v3.1.0：修改模式——校验 plan_id 存在且属于当前用户
+  const mode = args.mode === 'update' ? 'update' : 'create';
+  if (mode === 'update') {
+    const planId = String(args.plan_id || '').trim();
+    if (!planId) return { ok: false, error: 'mode=update 时必须传 plan_id' };
+    const userId = context && context.userId;
+    if (!userId) return { ok: false, error: '缺少用户上下文' };
+    const plan = memory.getPlan(userId, planId);
+    if (!plan) return { ok: false, error: '找不到该行程方案（plan_id=' + planId + '），请先用 get_plan 查' };
+    const merged = {
+      ...plan,
+      ...{
+        title: args.title !== undefined ? String(args.title) : plan.title,
+        destination: String(destination),
+        budget_cny: args.budget_cny !== undefined ? toNumber(args.budget_cny) : plan.budget_cny,
+      },
+    };
+    const checked = buildItinerary(merged, args.days, warnings);
+    return { ok: true, itinerary: { ...checked, id: plan.id, mode: 'update' }, warnings };
   }
 
   const days = [];
@@ -100,19 +133,26 @@ function run(args) {
     });
   });
 
+  const checked = buildItinerary(
+    { title: String(args.title || destination + '行程'), destination, budget_cny: toNumber(args.budget_cny) },
+    days,
+    warnings,
+  );
+  return { ok: true, itinerary: { ...checked, mode: 'create' }, warnings };
+}
+
+function buildItinerary(source, days, warnings) {
   const totalCost = days.reduce(
     (sum, day) => sum + day.items.reduce((acc, item) => acc + item.cost_cny, 0),
     0,
   );
-
-  const itinerary = {
-    title: String(args.title || destination + '行程'),
-    destination,
-    budget_cny: toNumber(args.budget_cny) || Math.round(totalCost),
+  return {
+    title: String(source.title || ''),
+    destination: String(source.destination || ''),
+    budget_cny: Number(source.budget_cny) || Math.round(totalCost),
     days,
+    warnings,
   };
-
-  return { ok: true, itinerary, warnings };
 }
 
 module.exports = { def, run };

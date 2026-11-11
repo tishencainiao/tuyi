@@ -159,7 +159,10 @@ function normalizeCity(name) {
 }
 
 function computePersonalStats(record) {
-  const itineraries = Array.isArray(record.itineraries) ? record.itineraries : [];
+  const all = Array.isArray(record.itineraries) ? record.itineraries : [];
+  // v3.1.0：只有确认过的行程（confirmed / in_progress / completed）才算「去过」；
+  // 草稿方案不计入城市 / 天数 / 预算统计
+  const itineraries = all.filter((item) => item.status && item.status !== 'draft');
   const cityMap = new Map();
   const tagCount = new Map();
 
@@ -190,6 +193,7 @@ function computePersonalStats(record) {
 
   return {
     tripCount: itineraries.length,
+    draftCount: all.length - itineraries.length,
     cityCount: cities.length,
     totalDays,
     totalBudget,
@@ -199,12 +203,14 @@ function computePersonalStats(record) {
     memories: (record.memories || []).length,
     turnsCount: (record.turns || []).length,
     hasInsights: Boolean(record.insights && record.insights.summary),
-    recentTrips: itineraries.slice(-5).reverse().map((item) => ({
+    recentTrips: all.slice(-5).reverse().map((item) => ({
+      id: item.id || '',
       ts: item.ts || '',
       title: item.title || '',
       destination: item.destination || '',
       days: (item.days || []).length,
       budget_cny: Number(item.budget_cny) || 0,
+      status: item.status || 'draft',
     })),
   };
 }

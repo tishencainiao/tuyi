@@ -270,6 +270,45 @@ function handleVisitsList(req, res) {
   return sendJSON(res, 200, { manual: memory.listVisits(user.userId) });
 }
 
+// ---- 行程方案（v3.1.0 状态机）----
+
+function handlePlansList(req, res) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const plans = memory.listPlans(user.userId).map((item) => ({
+    id: item.id,
+    ts: item.ts,
+    title: item.title,
+    destination: item.destination,
+    status: item.status,
+    budget_cny: item.budget_cny,
+    days: item.days,
+    previousDays: item.previousDays || [],
+    revisions: item.revisions || 0,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  }));
+  return sendJSON(res, 200, { plans });
+}
+
+async function handlePlanStatus(req, res, id) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const body = await readJsonBody(req);
+  if (!body) return sendJSON(res, 400, { error: '请求体不是合法 JSON' });
+  const result = memory.setItineraryStatus(user.userId, id, String(body.status || '').trim());
+  if (!result.ok) return sendJSON(res, 400, { error: result.error });
+  return sendJSON(res, 200, { ok: true, itinerary: result.itinerary });
+}
+
+function handlePlanRemove(req, res, id) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const result = memory.removeItinerary(user.userId, id);
+  if (!result.ok) return sendJSON(res, 400, { error: result.error });
+  return sendJSON(res, 200, { ok: true });
+}
+
 async function handleVisitCreate(req, res) {
   const user = currentUser(req);
   if (!user) return sendJSON(res, 401, { error: '未登录' });
@@ -327,6 +366,11 @@ const server = http.createServer((req, res) => {
   if (method === 'GET' && pathname === '/api/visits') return handleVisitsList(req, res);
   if (method === 'POST' && pathname === '/api/visits') return handleVisitCreate(req, res);
   if (method === 'DELETE' && pathname === '/api/visits') return handleVisitRemove(url, req, res);
+  if (method === 'GET' && pathname === '/api/plans') return handlePlansList(req, res);
+  const planPath = pathname.match(/^\/api\/plans\/([^/]+)$/);
+  if (planPath && method === 'DELETE') return handlePlanRemove(req, res, decodeURIComponent(planPath[1]));
+  const planStatusPath = pathname.match(/^\/api\/plans\/([^/]+)\/status$/);
+  if (planStatusPath && method === 'PUT') return handlePlanStatus(req, res, decodeURIComponent(planStatusPath[1]));
   if (method === 'GET' && pathname === '/api/stats') {
     if (!currentUser(req)) return sendJSON(res, 401, { error: '未登录' });
     return sendJSON(res, 200, stats.computeStats(stats.collectRecords()));

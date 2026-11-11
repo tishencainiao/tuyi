@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { App, Button, Input, Spin, Tag } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
-import { api, chatStream, Itinerary } from '../api';
+import { api, chatStream, Itinerary, PlanStatus } from '../api';
 import PlanCard from '../components/PlanCard';
 
 interface Msg {
   role: 'user' | 'assistant';
   text: string;
+  ts?: string;
   streaming?: boolean;
   error?: boolean;
 }
@@ -17,10 +18,16 @@ interface ToolState {
   status: 'running' | 'ok' | 'fail';
 }
 
+type TimelineItem =
+  | { kind: 'msg'; key: string; msg: Msg }
+  | { kind: 'plan'; key: string; plan: Itinerary };
+
 const TOOL_LABELS: Record<string, string> = {
   search_poi: '正在查找景点信息',
   get_weather: '正在查询天气',
   plan_trip: '正在生成行程方案',
+  get_plan: '正在读取行程方案',
+  update_plan_status: '正在更新行程状态',
   memory_edit: '正在整理记忆',
 };
 
@@ -43,11 +50,11 @@ export default function ChatPage() {
 
   useEffect(() => {
     let alive = true;
-    api
-      .history('default', 60)
-      .then((data) => {
+    Promise.all([api.history('default', 60), api.plans()])
+      .then(([history, planData]) => {
         if (!alive) return;
-        setMessages(data.turns.map((turn) => ({ role: turn.role, text: turn.text })));
+        setMessages(history.turns.map((turn) => ({ role: turn.role, text: turn.text, ts: turn.ts })));
+        setPlans(planData.plans);
       })
       .catch(() => {
         if (alive) setMessages([]);
@@ -60,33 +67,103 @@ export default function ChatPage() {
     };
   }, []);
 
+  const timeline = useMemo<TimelineItem[]>(() => {
+    const items: TimelineItem[] = [
+      ...messages.map((msg, index) => ({
+        kind: 'msg' as const,
+        key: 'msg-' + index + '-' + (msg.ts || 'live'),
+        msg,
+      })),
+      ...plans.map((plan) => ({
+        kind: 'plan' as const,
+        key: 'plan-' + (plan.id || plan.ts),
+        plan,
+      })),
+    ];
+    items.sort((a, b) => {
+      const at = a.kind === 'msg' ? a.msg.ts || '' : a.plan.ts || '';
+      const bt = b.kind === 'msg' ? b.msg.ts || '' : b.plan.ts || '';
+      // 没有 ts 的（正在流式输出）始终排最后
+      if (!at && bt) return 1;
+      if (at && !bt) return -1;
+      if (at === bt) return 0;
+      return at < bt ? -1 : 1;
+    });
+    return items;
+  }, [messages, plans]);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, plans, tool]);
+  }, [timeline, tool]);
+
+  const updatePlan = (plan: Itinerary) => {
+    setPlans((prev) => {
+      const index = prev.findIndex((item) => (plan.id ? item.id === plan.id : item.ts === plan.ts));
+      if (index < 0) return [...prev, plan];
+      const next = [...prev];
+      next[index] = plan;
+      return next;
+    });
+  };
+
+  const removePlan = (plan: Itinerary) => {
+    setPlans((prev) => prev.filter((item) => !(plan.id ? item.id === plan.id : item.ts === plan.ts)));
+  };
+
+  const handleStatus = async (plan: Itinerary, status: PlanStatus) => {
+    if (!plan.id) return;
+    try {
+      const result = await api.setPlanStatus(plan.id, status);
+      updatePlan(result.itinerary);
+      const labels: Record<PlanStatus, string> = {
+        draft: '草稿',
+        confirmed: '已确认行程，城市已点亮到地图',
+        in_progress: '已标记为进行中，祝玩得开心',
+        completed: '行程已完成，已计入你的旅行足迹',
+      };
+      message.success(labels[status]);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '更新失败');
+    }
+  };
+
+  const handleDelete = async (plan: Itinerary) => {
+    if (!plan.id) return;
+    try {
+      await api.removePlan(plan.id);
+      removePlan(plan);
+      message.success('草稿已删除');
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '删除失败');
+    }
+  };
+
+  const handleRevise = (plan: Itinerary) => {
+    setInput('修改这份行程（' + (plan.title || plan.destination || '旅行方案') + '）：');
+  };
 
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
     setInput('');
     setSending(true);
-    const assistantIndex = messages.length + 1;
     setMessages((prev) => [
       ...prev,
-      { role: 'user', text },
+      { role: 'user', text, ts: new Date().toISOString() },
       { role: 'assistant', text: '', streaming: true },
     ]);
 
     const appendAssistant = (chunk: string) => {
       setMessages((prev) =>
         prev.map((item, index) =>
-          index === assistantIndex ? { ...item, text: item.text + chunk } : item,
+          index === prev.length - 1 ? { ...item, text: item.text + chunk } : item,
         ),
       );
     };
     const patchAssistant = (patch: Partial<Msg>) => {
       setMessages((prev) =>
-        prev.map((item, index) => (index === assistantIndex ? { ...item, ...patch } : item)),
+        prev.map((item, index) => (index === prev.length - 1 ? { ...item, ...patch } : item)),
       );
     };
 
@@ -103,7 +180,7 @@ export default function ChatPage() {
           setTool({ label: TOOL_LABELS[name] || name, status: ok ? 'ok' : 'fail' });
         },
         onItinerary: (value) => {
-          setPlans((prev) => [...prev, value]);
+          updatePlan(value);
         },
         onDone: () => {
           setTool(null);
@@ -113,7 +190,7 @@ export default function ChatPage() {
           setTool(null);
           setMessages((prev) =>
             prev.map((item, index) => {
-              if (index !== assistantIndex) return item;
+              if (index !== prev.length - 1) return item;
               const base = item.text ? item.text + '\n\n' : '';
               return { ...item, text: base + errorText, streaming: false, error: true };
             }),
@@ -141,7 +218,7 @@ export default function ChatPage() {
           </div>
         ) : null}
 
-        {loaded && messages.length === 0 && !sending ? (
+        {loaded && messages.length === 0 && plans.length === 0 && !sending ? (
           <div style={{ textAlign: 'center', padding: '48px 16px' }}>
             <img src="/favicon.svg" alt="小忆" style={{ width: 72, height: 72 }} />
             <p style={{ fontSize: 18, fontWeight: 600, margin: '12px 0 4px' }}>你好，我是小忆</p>
@@ -158,32 +235,38 @@ export default function ChatPage() {
           </div>
         ) : null}
 
-        {messages.map((item, index) =>
-          item.role === 'user' ? (
-            <div className="msg-row user" key={'u' + index}>
-              <div className="msg-bubble">{item.text}</div>
-            </div>
+        {timeline.map((item) =>
+          item.kind === 'msg' ? (
+            item.msg.role === 'user' ? (
+              <div className="msg-row user" key={item.key}>
+                <div className="msg-bubble">{item.msg.text}</div>
+              </div>
+            ) : (
+              <div className="msg-row assistant" key={item.key}>
+                <div className="xiaoyi-avatar">
+                  <img src="/favicon.svg" alt="小忆" />
+                </div>
+                <div
+                  className={
+                    'msg-bubble' +
+                    (item.msg.streaming ? ' streaming-cursor' : '') +
+                    (item.msg.error ? ' msg-error' : '')
+                  }
+                >
+                  {item.msg.text || (item.msg.streaming ? '' : '（无回复）')}
+                </div>
+              </div>
+            )
           ) : (
-            <div className="msg-row assistant" key={'a' + index}>
-              <div className="xiaoyi-avatar">
-                <img src="/favicon.svg" alt="小忆" />
-              </div>
-              <div
-                className={
-                  'msg-bubble' +
-                  (item.streaming ? ' streaming-cursor' : '') +
-                  (item.error ? ' msg-error' : '')
-                }
-              >
-                {item.text || (item.streaming ? '' : '（无回复）')}
-              </div>
-            </div>
+            <PlanCard
+              itinerary={item.plan}
+              key={item.key}
+              onStatus={handleStatus}
+              onRevise={handleRevise}
+              onDelete={handleDelete}
+            />
           ),
         )}
-
-        {plans.map((plan, index) => (
-          <PlanCard itinerary={plan} key={plan.ts + '-' + index} />
-        ))}
 
         {tool ? (
           <div className="chat-tools">
@@ -198,28 +281,23 @@ export default function ChatPage() {
           </div>
         ) : null}
       </div>
-
       <div className="chat-input">
         <Input.TextArea
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onPressEnter={onPressEnter}
-          placeholder="和小忆说点什么…（Enter 发送，Shift+Enter 换行）"
-          autoSize={{ minRows: 2, maxRows: 5 }}
-          maxLength={2000}
+          placeholder="说点什么…（Enter 发送，Shift+Enter 换行）"
+          autoSize={{ minRows: 1, maxRows: 4 }}
           disabled={sending}
         />
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            onClick={() => void send()}
-            loading={sending}
-            disabled={!input.trim()}
-          >
-            发送
-          </Button>
-        </div>
+        <Button
+          type="primary"
+          icon={<SendOutlined />}
+          onClick={() => void send()}
+          disabled={sending || !input.trim()}
+        >
+          {sending ? '小忆思考中…' : '发送'}
+        </Button>
       </div>
     </div>
   );

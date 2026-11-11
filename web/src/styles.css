@@ -256,6 +256,34 @@ body {
   line-height: 1.8;
 }
 
+.plan-item-time {
+  display: inline-block;
+  min-width: 44px;
+  color: var(--tuyi-sky-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-item-place {
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.plan-draft-hint {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.plan-card-actions {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--tuyi-line);
+}
+
 /* ---------- 我的旅行 ---------- */
 .kpi-card {
   text-align: center;
@@ -319,13 +347,16 @@ body {
 
 /* 行程卡片状态色 */
 .plan-draft {
-  border-color: var(--tuyi-line) !important;
+  border-color: #fde68a !important;
 }
 .plan-confirmed {
-  border-color: #38bdf8 !important;
+  border-color: #86efac !important;
+}
+.plan-in_progress {
+  border-color: #93c5fd !important;
 }
 .plan-completed {
-  border-color: #10b981 !important;
+  border-color: var(--tuyi-line) !important;
 }
 
 /* 流式输出光标 */
