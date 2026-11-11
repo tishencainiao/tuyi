@@ -2,9 +2,10 @@
 'use strict';
 
 /**
- * 途忆 · HTTP 服务（v1.1.0：本地账号 + 多轮会话历史）
+ * 途忆 · HTTP 服务（v3.0.0：React 前端 + SPA 路由）
  *
- * 页面：/login.html 公开；/、/dashboard.html、/profile.html 需登录（未登录 302 到登录页）
+ * 页面：/login、/register 公开；/、/travel、/profile 需登录（未登录 302 到 /login）
+ * 旧版页面保留在 /legacy/ 下（过渡期参考，v3.4.0 删除）
  * 接口：
  *   POST /api/register  {username,password}   注册并自动登录
  *   POST /api/login     {username,password}   登录（httpOnly cookie）
@@ -12,9 +13,10 @@
  *   GET  /api/me                              当前用户
  *   POST /api/chat      {message,conversationId?}  SSE 流式对话（userId 从 session 取）
  *   GET  /api/history   ?conversationId=      会话历史
- *   GET  /api/profile   ?conversationId=      本人画像 / 记忆 / 行程
- *   GET  /api/stats     全局统计（含演示数据）
- *   GET  /api/health    健康检查（无需登录）
+ *   GET  /api/profile                         本人画像 / 记忆 / 行程
+ *   GET  /api/stats/personal                  个人统计
+ *   GET  /api/visits                          去过地（手动点亮）
+ *   GET  /api/health                          健康检查（无需登录）
  */
 
 const http = require('node:http');
@@ -23,6 +25,8 @@ const path = require('node:path');
 
 const ROOT = __dirname;
 const WEB_DIR = path.join(ROOT, 'web');
+const WEB_DIST = path.join(WEB_DIR, 'dist');
+const LEGACY_DIR = path.join(WEB_DIR, 'legacy');
 
 // .env 缺失也能启动：只有真正调用模型时才需要密钥（兼容 Node 18）
 require('./brain/env').loadEnv(ROOT);
@@ -41,10 +45,13 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.jpg': 'image/jpeg',
   '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.map': 'application/json',
+  '.webmanifest': 'application/manifest+json',
 };
-
-const PROTECTED_PAGES = new Set(['/', '/index.html', '/dashboard.html', '/profile.html']);
 
 function sendJSON(res, status, body) {
   const data = JSON.stringify(body);
@@ -60,18 +67,7 @@ function redirect(res, location) {
   res.end();
 }
 
-function sendStatic(res, urlPath) {
-  let pathname;
-  try {
-    pathname = decodeURIComponent(urlPath.split('?')[0]);
-  } catch {
-    return sendJSON(res, 400, { error: 'bad url' });
-  }
-  const rel = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
-  const abs = path.resolve(WEB_DIR, rel);
-  if (!abs.startsWith(WEB_DIR + path.sep)) {
-    return sendJSON(res, 403, { error: 'forbidden' });
-  }
+function serveFile(res, abs) {
   fs.readFile(abs, (err, data) => {
     if (err) return sendJSON(res, 404, { error: 'not found' });
     res.writeHead(200, {
@@ -80,6 +76,36 @@ function sendStatic(res, urlPath) {
     });
     res.end(data);
   });
+}
+
+// 新前端（web/dist，vite 构建产物）：文件优先，无扩展名路径回退 index.html（SPA）
+function serveDist(res, urlPath) {
+  let rel;
+  try {
+    rel = decodeURIComponent(urlPath.split('?')[0]).replace(/^\/+/, '');
+  } catch {
+    return sendJSON(res, 400, { error: 'bad url' });
+  }
+  rel = rel || 'index.html';
+  const abs = path.resolve(WEB_DIST, rel);
+  if (!abs.startsWith(WEB_DIST + path.sep)) return sendJSON(res, 403, { error: 'forbidden' });
+  if (fs.existsSync(abs) && fs.statSync(abs).isFile()) return serveFile(res, abs);
+  if (!path.extname(rel)) return serveFile(res, path.join(WEB_DIST, 'index.html'));
+  return sendJSON(res, 404, { error: 'not found' });
+}
+
+// 旧版页面（web/legacy，过渡期参考；v3.4.0 随演示信息清理删除）
+function serveLegacy(res, urlPath) {
+  let rel;
+  try {
+    rel = decodeURIComponent(urlPath.split('?')[0]).replace(/^\/legacy\/?/, '').replace(/^\/+/, '');
+  } catch {
+    return sendJSON(res, 400, { error: 'bad url' });
+  }
+  rel = rel || 'index.html';
+  const abs = path.resolve(LEGACY_DIR, rel);
+  if (!abs.startsWith(LEGACY_DIR + path.sep)) return sendJSON(res, 403, { error: 'forbidden' });
+  return serveFile(res, abs);
 }
 
 function readBody(req, limit = 1024 * 1024) {
@@ -309,13 +335,36 @@ const server = http.createServer((req, res) => {
   // 页面
   if (method === 'GET' || method === 'HEAD') {
     const user = currentUser(req);
-    if (pathname === '/login.html') {
-      return user ? redirect(res, '/') : sendStatic(res, pathname);
+
+    // 旧地址友好跳转
+    const LEGACY_REDIRECTS = {
+      '/index.html': '/',
+      '/dashboard.html': '/travel',
+      '/profile.html': '/profile',
+      '/login.html': '/login',
+    };
+    if (LEGACY_REDIRECTS[pathname]) return redirect(res, LEGACY_REDIRECTS[pathname]);
+
+    // 旧版页面（过渡期参考）
+    if (pathname.startsWith('/legacy')) {
+      if (pathname.endsWith('login.html')) {
+        return user ? redirect(res, '/') : serveLegacy(res, pathname);
+      }
+      if (!user) return redirect(res, '/login');
+      return serveLegacy(res, pathname);
     }
-    if (PROTECTED_PAGES.has(pathname) && !user) {
-      return redirect(res, '/login.html');
+
+    // 静态资源（登录页也需要）
+    if (pathname.startsWith('/assets/') || pathname.startsWith('/vendor/') || pathname.startsWith('/favicon')) {
+      return serveDist(res, pathname);
     }
-    return sendStatic(res, pathname);
+
+    // SPA：登录/注册公开，其余需登录
+    if (pathname === '/login' || pathname === '/register') {
+      return user ? redirect(res, '/') : serveDist(res, pathname);
+    }
+    if (!user) return redirect(res, '/login');
+    return serveDist(res, pathname);
   }
 
   return sendJSON(res, 405, { error: 'method not allowed' });
@@ -327,5 +376,5 @@ server.listen(cfg.server.port, cfg.server.host, () => {
   console.log('[server] 模型：' + cfg.llm.model);
   console.log('[server] 密钥：' + (process.env.DEEPSEEK_API_KEY ? '已配置' : '未配置（复制 .env.example 为 .env 并填写 DEEPSEEK_API_KEY）'));
   console.log('[server] 工具：' + (tools.defs().map((d) => d.function.name).join(', ') || '无'));
-  console.log('[server] 账号：本地账号（data/users.json），测试账户见 scripts/seed-accounts.js');
+  console.log('[server] 账号：本地账号（data/users.json），注册入口：/register');
 });
