@@ -55,14 +55,20 @@ function parseLocation(location) {
 function formatPoi(raw) {
   const poi = raw || {};
   const biz = poi.biz_ext || {};
+  const cost = Number(biz.cost) || 0;
+  const typeText = String(poi.type || '');
+  // 高德 biz_ext.cost 只有门票 / 人均类 POI 有值，酒店普遍没有
+  const noPrice = !cost && /酒店|宾馆|住宿|民宿|旅店/.test(typeText);
   return {
     name: String(poi.name || ''),
     address: String(poi.address || ''),
-    type: String(poi.type || ''),
+    type: typeText,
     location: parseLocation(poi.location),
     tel: String(poi.tel || ''),
     rating: Number(biz.rating) || 0,
-    cost: Number(biz.cost) || 0,
+    cost,
+    // 无公开价格时给模型一个可直接引用的提示，避免说出「接口没返回房价」这类技术话
+    price_note: noPrice ? '暂无公开价格，价格以携程 / 美团实时价为准' : '',
   };
 }
 

@@ -40,7 +40,7 @@ function AppShell({ children }: { children: ReactNode }) {
     <>
       <header className="app-header">
         <Link to="/" className="brand">
-          <img src="/favicon.svg" alt="途忆 logo" />
+          <img src="/xiaoyi/brand-logo.png" alt="途忆 logo" />
           途忆
         </Link>
         <nav className="app-nav">

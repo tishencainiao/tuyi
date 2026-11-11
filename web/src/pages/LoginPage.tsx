@@ -29,7 +29,7 @@ export default function LoginPage() {
     <div className="auth-wrap">
       <Card className="auth-card">
         <div className="auth-brand">
-          <img src="/favicon.svg" alt="途忆" />
+          <img src="/xiaoyi/xiaoyi-hero.png" alt="小忆" />
           <div className="name">途忆</div>
           <div className="slogan">小忆帮你把想去的地方，变成能走的路线</div>
         </div>

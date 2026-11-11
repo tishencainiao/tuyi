@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { App, Button, Input, Spin, Tag } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
+import ReactMarkdown from 'react-markdown';
 import { api, chatStream, Itinerary, PlanStatus } from '../api';
 import PlanCard from '../components/PlanCard';
 
@@ -38,6 +39,54 @@ const SUGGESTIONS = [
   '我想去云南玩 5 天，预算 3000 元',
 ];
 
+const IDLE_AFTER_MS = 30000;
+const VIDEO_SWITCH_MS = 6000;
+const WORK_VIDEOS = ['work-map', 'work-hand-plan', 'work-typing'];
+const IDLE_VIDEOS = ['idle-nap', 'idle-milktea', 'idle-spin'];
+
+/** 小忆动态形象：生成方案时播工作动作；30 秒没动静播休闲动作；平时隐藏。 */
+function XiaoyiLive({ busy, lastActivity }: { busy: boolean; lastActivity: number }) {
+  const [mode, setMode] = useState<'work' | 'idle' | null>(null);
+  const [videoIndex, setVideoIndex] = useState(0);
+
+  useEffect(() => {
+    if (busy) {
+      setMode('work');
+      return;
+    }
+    const check = () => setMode(Date.now() - lastActivity > IDLE_AFTER_MS ? 'idle' : null);
+    check();
+    const timer = window.setInterval(check, 3000);
+    return () => window.clearInterval(timer);
+  }, [busy, lastActivity]);
+
+  // loop 视频不会触发 onEnded，用定时器轮换动作
+  useEffect(() => {
+    if (!mode) return;
+    const timer = window.setInterval(() => setVideoIndex((index) => index + 1), VIDEO_SWITCH_MS);
+    return () => window.clearInterval(timer);
+  }, [mode]);
+
+  const list = mode === 'work' ? WORK_VIDEOS : mode === 'idle' ? IDLE_VIDEOS : null;
+  if (!list) return null;
+  const name = list[videoIndex % list.length];
+
+  return (
+    <div className="xiaoyi-live">
+      <video
+        key={mode + '-' + name}
+        src={'/xiaoyi/' + name + '.mp4'}
+        autoPlay
+        loop
+        muted
+        playsInline
+        style={{ width: '100%', height: '168px', objectFit: 'cover' }}
+      />
+      <div className="xiaoyi-live-label">{mode === 'work' ? '小忆正在排行程…' : '小忆在发呆…'}</div>
+    </div>
+  );
+}
+
 export default function ChatPage() {
   const { message } = App.useApp();
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -46,6 +95,7 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [input, setInput] = useState('');
   const [loaded, setLoaded] = useState(false);
+  const [lastActivity, setLastActivity] = useState(() => Date.now());
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -148,6 +198,7 @@ export default function ChatPage() {
     if (!text || sending) return;
     setInput('');
     setSending(true);
+    setLastActivity(Date.now());
     setMessages((prev) => [
       ...prev,
       { role: 'user', text, ts: new Date().toISOString() },
@@ -185,6 +236,7 @@ export default function ChatPage() {
         onDone: () => {
           setTool(null);
           patchAssistant({ streaming: false });
+          setLastActivity(Date.now());
         },
         onError: (errorText) => {
           setTool(null);
@@ -200,6 +252,7 @@ export default function ChatPage() {
       });
     } finally {
       setSending(false);
+      setLastActivity(Date.now());
     }
   };
 
@@ -207,6 +260,12 @@ export default function ChatPage() {
     if (event.shiftKey) return;
     event.preventDefault();
     void send();
+  };
+
+  const renderAssistantText = (msg: Msg) => {
+    if (!msg.text) return msg.streaming ? null : '（无回复）';
+    if (msg.streaming) return msg.text;
+    return <ReactMarkdown>{msg.text}</ReactMarkdown>;
   };
 
   return (
@@ -220,7 +279,7 @@ export default function ChatPage() {
 
         {loaded && messages.length === 0 && plans.length === 0 && !sending ? (
           <div style={{ textAlign: 'center', padding: '48px 16px' }}>
-            <img src="/favicon.svg" alt="小忆" style={{ width: 72, height: 72 }} />
+            <img src="/xiaoyi/xiaoyi-hero.png" alt="小忆" style={{ width: 120, height: 120, objectFit: 'contain' }} />
             <p style={{ fontSize: 18, fontWeight: 600, margin: '12px 0 4px' }}>你好，我是小忆</p>
             <p className="muted" style={{ margin: '0 0 20px' }}>
               告诉我你想去哪里，我来帮你排路线、查天气、算预算
@@ -244,7 +303,7 @@ export default function ChatPage() {
             ) : (
               <div className="msg-row assistant" key={item.key}>
                 <div className="xiaoyi-avatar">
-                  <img src="/favicon.svg" alt="小忆" />
+                  <img src="/xiaoyi/xiaoyi-avatar.png" alt="小忆" />
                 </div>
                 <div
                   className={
@@ -253,7 +312,7 @@ export default function ChatPage() {
                     (item.msg.error ? ' msg-error' : '')
                   }
                 >
-                  {item.msg.text || (item.msg.streaming ? '' : '（无回复）')}
+                  {renderAssistantText(item.msg)}
                 </div>
               </div>
             )
@@ -281,10 +340,16 @@ export default function ChatPage() {
           </div>
         ) : null}
       </div>
+
+      <XiaoyiLive busy={sending} lastActivity={lastActivity} />
+
       <div className="chat-input">
         <Input.TextArea
           value={input}
-          onChange={(event) => setInput(event.target.value)}
+          onChange={(event) => {
+            setInput(event.target.value);
+            setLastActivity(Date.now());
+          }}
           onPressEnter={onPressEnter}
           placeholder="说点什么…（Enter 发送，Shift+Enter 换行）"
           autoSize={{ minRows: 1, maxRows: 4 }}

@@ -168,7 +168,7 @@ export default function RegisterPage() {
     <div className="auth-wrap">
       <Card className="auth-card" title="注册途忆账号">
         <div className="auth-brand">
-          <img src="/favicon.svg" alt="途忆" />
+          <img src="/xiaoyi/xiaoyi-hero.png" alt="小忆" />
         </div>
         <Form form={form} layout="vertical" onFinish={onFinish} autoComplete="off">
           <Tabs activeKey={activeTab} onChange={onTabChange} items={tabItems} size="small" />

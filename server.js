@@ -55,6 +55,8 @@ const MIME = {
   '.woff2': 'font/woff2',
   '.map': 'application/json',
   '.webmanifest': 'application/manifest+json',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
 };
 
 function sendJSON(res, status, body) {
@@ -445,7 +447,12 @@ const server = http.createServer((req, res) => {
     }
 
     // 静态资源（登录页也需要）
-    if (pathname.startsWith('/assets/') || pathname.startsWith('/vendor/') || pathname.startsWith('/favicon')) {
+    if (
+      pathname.startsWith('/assets/') ||
+      pathname.startsWith('/vendor/') ||
+      pathname.startsWith('/xiaoyi/') ||
+      pathname.startsWith('/favicon')
+    ) {
       return serveDist(res, pathname);
     }
 

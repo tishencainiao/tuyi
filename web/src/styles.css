@@ -60,8 +60,9 @@ body {
 }
 
 .app-header .brand img {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
 }
 
 .app-nav {
@@ -122,8 +123,9 @@ body {
 }
 
 .auth-brand img {
-  width: 64px;
-  height: 64px;
+  width: 150px;
+  height: 150px;
+  object-fit: contain;
 }
 
 .auth-brand .name {
@@ -139,6 +141,7 @@ body {
 
 /* ---------- 聊天页 ---------- */
 .chat-page {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: calc(100vh - 56px);
@@ -186,6 +189,34 @@ body {
   background: var(--tuyi-sky);
   color: #ffffff;
   border-top-right-radius: 4px;
+}
+
+/* Markdown 排版（小忆回复） */
+.msg-row.assistant .msg-bubble p {
+  margin: 0 0 8px;
+}
+.msg-row.assistant .msg-bubble p:last-child {
+  margin-bottom: 0;
+}
+.msg-row.assistant .msg-bubble ul,
+.msg-row.assistant .msg-bubble ol {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+}
+.msg-row.assistant .msg-bubble li {
+  margin: 2px 0;
+}
+.msg-row.assistant .msg-bubble strong {
+  color: var(--tuyi-sky-deep);
+}
+.msg-row.assistant .msg-bubble a {
+  color: var(--tuyi-sky-deep);
+}
+.msg-row.assistant .msg-bubble code {
+  background: var(--tuyi-sky-light);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 13px;
 }
 
 .chat-tools {
@@ -345,6 +376,43 @@ body {
   color: var(--tuyi-sky-deep);
 }
 
+/* 小忆动态形象卡片（生成方案=工作动作，30 秒无操作=休闲动作） */
+.xiaoyi-live {
+  position: absolute;
+  right: 24px;
+  bottom: 96px;
+  width: 168px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--tuyi-line);
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(14, 165, 233, 0.16);
+  z-index: 10;
+  animation: xiaoyi-pop 0.35s ease;
+}
+
+.xiaoyi-live video {
+  display: block;
+}
+
+.xiaoyi-live-label {
+  font-size: 12px;
+  color: var(--tuyi-sub);
+  text-align: center;
+  padding: 4px 0 6px;
+}
+
+@keyframes xiaoyi-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* 行程卡片状态色 */
 .plan-draft {
   border-color: #fde68a !important;
@@ -408,6 +476,11 @@ body {
   }
   .page {
     padding: 16px 12px 40px;
+  }
+  .xiaoyi-live {
+    width: 132px;
+    right: 12px;
+    bottom: 88px;
   }
 }
 
