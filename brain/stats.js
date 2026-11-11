@@ -17,6 +17,7 @@ const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
 const DATA_DIR = process.env.TUYI_DATA_DIR || path.join(ROOT, 'data', 'memory');
+const { cleanTags } = require('./meta-tags');
 
 const CITIES = [
   ...new Set([
@@ -86,9 +87,10 @@ function computePersonalStats(record) {
   const tagCount = new Map();
 
   for (const item of record.memories || []) {
-    for (const tag of item.tags || []) tagCount.set(tag, (tagCount.get(tag) || 0) + 1);
+    // v3.6.0：聚合层兜底过滤元操作标签（与 addFacts/存量清洗共用黑名单）
+    for (const tag of cleanTags(item.tags, 4)) tagCount.set(tag, (tagCount.get(tag) || 0) + 1);
   }
-  for (const tag of (record.insights && record.insights.tags) || []) {
+  for (const tag of cleanTags((record.insights && record.insights.tags) || [], 8)) {
     tagCount.set(tag, (tagCount.get(tag) || 0) + 1);
   }
 

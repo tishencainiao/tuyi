@@ -51,7 +51,8 @@ async function run(args, context = {}) {
   if (action === 'add') {
     const text = String(args.text || '').trim();
     if (!text) return { ok: false, error: 'add 需要 text' };
-    const result = memory.addMemory(userId, text, Array.isArray(args.tags) ? args.tags : []);
+    // v3.6.0：标签过元操作黑名单（记忆修改/删除记忆等不落库）
+    const result = memory.addMemory(userId, text, memory.cleanTags(args.tags, 4));
     return result.ok ? { ok: true, message: '已记下：' + text } : result;
   }
 

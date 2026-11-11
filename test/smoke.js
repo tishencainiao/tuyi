@@ -491,6 +491,69 @@ const sample = {
     assert.ok(block.includes('美食'));
   });
 
+  await check('记忆治理：元操作标签不落库（源头过滤）', () => {
+    const memory = require('../brain/memory');
+    const record = memory.load('smoke-meta');
+    memory.addFacts(record, [
+      { text: '喜欢慢节奏旅行', tags: ['慢节奏', '记忆修改', '行程管理'] },
+    ]);
+    memory.save(record);
+    const saved = memory.load('smoke-meta');
+    const item = saved.memories.find((one) => one.text.includes('慢节奏'));
+    assert.deepStrictEqual(item.tags, ['慢节奏']);
+  });
+
+  await check('记忆治理：80 条触发整理 + 合并建议执行 + 冲突二选一', () => {
+    const memory = require('../brain/memory');
+    const record = memory.load('smoke-review');
+    for (let index = 0; index < 80; index += 1) {
+      memory.addFacts(record, [{ text: '事实占位 ' + index + ' 条', tags: [] }]);
+    }
+    assert.strictEqual(memory.digestDue(record, { review_trigger_count: 80 }).due, true);
+    const ids = record.memories.slice(0, 2).map((one) => one.id);
+    record.memoryReview = {
+      updated: new Date().toISOString(),
+      state: 'pending',
+      merges: [{ ids, suggestion: '合并后的一条记忆' }],
+      conflicts: [],
+    };
+    memory.save(record);
+    const result = memory.applyMemoryReview('smoke-review', 'apply_merge', 0);
+    assert.strictEqual(result.ok, true);
+    const after = memory.load('smoke-review');
+    assert.ok(after.memories.some((one) => one.text === '合并后的一条记忆'));
+    assert.strictEqual(after.memoryReview.state, 'none');
+    const conflictRecord = memory.load('smoke-conflict');
+    memory.addFacts(conflictRecord, [{ text: '不吃辣', tags: [] }, { text: '能吃微辣', tags: [] }]);
+    memory.save(conflictRecord);
+    const loaded = memory.load('smoke-conflict');
+    loaded.memoryReview = {
+      updated: new Date().toISOString(),
+      state: 'pending',
+      merges: [],
+      conflicts: [{ aId: loaded.memories[0].id, bId: loaded.memories[1].id, a: '不吃辣', b: '能吃微辣' }],
+    };
+    memory.save(loaded);
+    assert.strictEqual(memory.applyMemoryReview('smoke-conflict', 'keep_second', 0).ok, true);
+    assert.deepStrictEqual(memory.load('smoke-conflict').memories.map((one) => one.text), ['能吃微辣']);
+  });
+
+  await check('记忆治理：renderBlock 注入待处理建议（小忆主动汇报用）', () => {
+    const memory = require('../brain/memory');
+    const record = memory.load('smoke-render');
+    memory.addFacts(record, [{ text: '不吃辣', tags: [] }]);
+    record.memoryReview = {
+      updated: new Date().toISOString(),
+      state: 'pending',
+      merges: [],
+      conflicts: [{ aId: '', bId: '', a: '不吃辣', b: '能吃微辣' }],
+    };
+    memory.save(record);
+    const block = memory.renderBlock(memory.load('smoke-render'), '今天吃什么');
+    assert.ok(block.includes('待处理的记忆整理建议'));
+    assert.ok(block.includes('不吃辣'));
+  });
+
   console.log('\n冒烟测试：' + passed + ' 通过 / ' + failed + ' 失败');
   if (failed) process.exitCode = 1;
 })();

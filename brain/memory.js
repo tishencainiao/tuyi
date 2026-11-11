@@ -14,6 +14,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { chatOnce, parseJsonLoose } = require('./llm');
+const { cleanTags } = require('./meta-tags');
 
 const ROOT = path.join(__dirname, '..');
 const DATA_DIR = process.env.TUYI_DATA_DIR || path.join(ROOT, 'data', 'memory');
@@ -145,9 +146,8 @@ function addFacts(record, facts) {
       id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       ts: new Date().toISOString(),
       text: text.slice(0, 200),
-      tags: Array.isArray(fact.tags)
-        ? fact.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 4)
-        : [],
+      // v3.6.0：标签过元操作黑名单（记忆修改/删除记忆等不落库）
+      tags: cleanTags(fact.tags, 4),
     });
     added += 1;
   }
@@ -338,7 +338,8 @@ function updateMemory(userId, id, patch = {}) {
     item.text = text.slice(0, 200);
   }
   if (Array.isArray(patch.tags)) {
-    item.tags = patch.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 4);
+    // v3.6.0：编辑记忆时同样过元操作黑名单
+    item.tags = cleanTags(patch.tags, 4);
   }
   item.updated = new Date().toISOString();
   save(record);
@@ -415,11 +416,34 @@ function retrieve(record, query, limit = 5) {
 function renderBlock(record, userText, memoryCfg = {}) {
   const lines = [];
   const insights = record.insights;
-  if (insights && Array.isArray(insights.tags) && insights.tags.length) {
-    lines.push('偏好标签：' + insights.tags.join('、'));
+  // v3.6.0：偏好标签过元操作黑名单（存量脏标签在注入层兜底过滤）
+  const insightTags = insights && Array.isArray(insights.tags) ? cleanTags(insights.tags, 8) : [];
+  if (insightTags.length) {
+    lines.push('偏好标签：' + insightTags.join('、'));
   }
   if (insights && insights.summary) {
     lines.push('关于这位用户的认识：' + insights.summary);
+  }
+  const review = record.memoryReview;
+  if (review && review.state === 'pending') {
+    const merges = Array.isArray(review.merges) ? review.merges : [];
+    const conflicts = Array.isArray(review.conflicts) ? review.conflicts : [];
+    if (merges.length || conflicts.length) {
+      lines.push('【待处理的记忆整理建议】（主动用口语向用户汇报，征得同意后用 handle_memory_review 工具执行；不要擅自改记忆；用户没兴趣就跳过，最多提一次）');
+      merges.forEach((item, index) => {
+        const sources = Array.isArray(item.ids) ? item.ids.join('、') : '';
+        lines.push(
+          '合并建议 ' + index + '：可把记忆 ' + sources + '（' + String(item.a || '') +
+            '；' + String(item.b || '') + '）合并为「' + String(item.suggestion || item.text || '') + '」',
+        );
+      });
+      conflicts.forEach((item, index) => {
+        lines.push(
+          '冲突 ' + index + '：「' + String(item.a || '') + '」与「' + String(item.b || '') +
+            '」矛盾，问用户以哪条为准',
+        );
+      });
+    }
   }
   const itineraries = (Array.isArray(record.itineraries) ? record.itineraries : []).filter(
     (item) => item.status && item.status !== PLAN_STATUS.DRAFT,
@@ -453,10 +477,13 @@ function renderBlock(record, userText, memoryCfg = {}) {
 
 function digestDue(record, memoryCfg = {}) {
   const trigger = Math.max(1, Number(memoryCfg.digest_trigger_count) || 3);
+  const reviewAt = Math.max(1, Number(memoryCfg.review_trigger_count) || 80);
   const minIntervalMs = Math.max(1, Number(memoryCfg.digest_min_interval_minutes) || 10) * 60 * 1000;
   const since = record.state.memoriesSinceDigest || 0;
   const lastAt = record.state.lastDigestAt ? Date.parse(record.state.lastDigestAt) : 0;
-  return { due: since >= trigger && Date.now() - lastAt >= minIntervalMs, since };
+  // v3.6.0：记忆条数达到 review_trigger_count（默认 80）时也触发消化整理
+  const countDue = (record.memories || []).length >= reviewAt;
+  return { due: (since >= trigger || countDue) && Date.now() - lastAt >= minIntervalMs, since };
 }
 
 function markDigest(record) {
@@ -476,6 +503,95 @@ function spawnDigest(userId) {
     /* 没有 Python 时静默跳过，不影响对话 */
   });
   return child;
+}
+
+// ---------------------------------------------------------------------------
+// 记忆治理（v3.6.0）：消化输出「合并建议 / 冲突提醒」，经用户确认后才生效
+// 数据落在 record.memoryReview：{ updated, state:'pending'|'none', merges[], conflicts[] }
+// ---------------------------------------------------------------------------
+
+function getPendingReview(userId) {
+  const record = load(userId);
+  const review = record.memoryReview;
+  if (!review || review.state !== 'pending') return null;
+  return { merges: Array.isArray(review.merges) ? review.merges : [], conflicts: Array.isArray(review.conflicts) ? review.conflicts : [] };
+}
+
+function findMemoryByIdOrText(record, item) {
+  const id = String(item.id || '');
+  if (id) {
+    const byId = record.memories.find((memory) => memory.id === id);
+    if (byId) return byId;
+  }
+  const text = String(item.text || item.a || '').trim();
+  if (!text) return null;
+  const key = normalizeFact(text);
+  return (
+    record.memories.find((memory) => normalizeFact(memory.text) === key) ||
+    record.memories.find((memory) => normalizeFact(memory.text).includes(key.slice(0, 8)) || key.includes(normalizeFact(memory.text).slice(0, 8))) ||
+    null
+  );
+}
+
+/**
+ * 执行一条待处理建议。
+ * decision: 'apply_merge'（按合并建议合并）| 'keep_first' / 'keep_second'（冲突二选一）| 'dismiss'（忽略）
+ * index：建议序号（merges 与 conflicts 分开编号，由 handle_memory_review 工具算出类型）
+ */
+function applyMemoryReview(userId, decision, index) {
+  const record = load(userId);
+  const review = record.memoryReview;
+  if (!review || review.state !== 'pending') {
+    return { ok: false, error: '当前没有待处理的记忆整理建议' };
+  }
+  const merges = Array.isArray(review.merges) ? review.merges : [];
+  const conflicts = Array.isArray(review.conflicts) ? review.conflicts : [];
+  const kind = String(decision || '').startsWith('keep') ? 'conflict' : 'merge';
+  const list = kind === 'conflict' ? conflicts : merges;
+  const target = list[Math.max(0, Number(index) || 0)];
+  if (!target) return { ok: false, error: '找不到第 ' + index + ' 条建议（该组只有 ' + list.length + ' 条）' };
+
+  const applied = [];
+  if (decision === 'apply_merge') {
+    const ids = Array.isArray(target.ids) ? target.ids : [];
+    const suggestion = String(target.suggestion || target.text || '').trim();
+    for (const item of ids) {
+      const hit = record.memories.find((memory) => String(memory.id) === String(item));
+      if (hit) {
+        record.memories = record.memories.filter((memory) => memory.id !== hit.id);
+        applied.push(hit.text);
+      }
+    }
+    if (suggestion && suggestion.length >= 2) {
+      record.memories.push({
+        id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        ts: new Date().toISOString(),
+        text: suggestion.slice(0, 200),
+        tags: cleanTags(target.tags, 4),
+      });
+    }
+  } else if (decision === 'keep_first' || decision === 'keep_second') {
+    const keepText = decision === 'keep_first' ? String(target.a || '') : String(target.b || '');
+    const dropText = decision === 'keep_first' ? String(target.b || '') : String(target.a || '');
+    const drop = findMemoryByIdOrText(record, { id: decision === 'keep_first' ? target.bId : target.aId, text: dropText });
+    if (drop) {
+      record.memories = record.memories.filter((memory) => memory.id !== drop.id);
+      applied.push(drop.text);
+    }
+    const keep = findMemoryByIdOrText(record, { id: decision === 'keep_first' ? target.aId : target.bId, text: keepText });
+    if (keep) applied.unshift(keep.text);
+  } else if (decision === 'dismiss') {
+    /* 用户忽略这条建议，不改任何数据 */
+  } else {
+    return { ok: false, error: '不支持的 decision：' + decision };
+  }
+
+  if (kind === 'conflict') conflicts.splice(Math.max(0, Number(index) || 0), 1);
+  else merges.splice(Math.max(0, Number(index) || 0), 1);
+  if (!merges.length && !conflicts.length) review.state = 'none';
+  review.updated = new Date().toISOString();
+  save(record);
+  return { ok: true, decision, applied, remaining: merges.length + conflicts.length };
 }
 
 async function extractFacts({ cfg, userText, assistantText }) {
@@ -561,4 +677,7 @@ module.exports = {
   extractFacts,
   rememberTurn,
   spawnDigest,
+  cleanTags,
+  getPendingReview,
+  applyMemoryReview,
 };

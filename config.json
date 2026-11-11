@@ -18,7 +18,8 @@
     "short_ttl_days": 7,
     "digest_trigger_count": 2,
     "digest_min_interval_minutes": 1,
-    "max_inject_memories": 5
+    "max_inject_memories": 5,
+    "review_trigger_count": 80
   },
   "budget": {
     "daily_cny": 2

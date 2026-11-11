@@ -24,11 +24,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.environ.get('TUYI_DATA_DIR') or os.path.join(ROOT, 'data', 'memory')
 
 DIGEST_PROMPT = """你是记忆消化器。把下面这位用户的历史记忆条目，提炼成「关于这位用户的稳定认识」：
-1) tags：3~6 个偏好标签（短词，如 慢节奏、带父母、预算中等、自然风光）；
+1) tags：3~6 个偏好标签（短词，如 慢节奏、带父母、预算中等、自然风光）；不要输出记忆修改/删除记忆/行程管理这类操作词；
 2) summary：一句话总结这位用户的旅行偏好（不超过 60 字）；
-3) confidence：high / medium / low（依据记忆条目的数量与一致性判断）。
+3) confidence：high / medium / low（依据记忆条目的数量与一致性判断）；
+4) merges：含义相同或几乎相同的记忆条目，给出合并建议（每条 {ids:["m..."], suggestion:"合并后的一句话"}），没有就输出 []；合并建议只是建议，绝不直接修改记忆；
+5) conflicts：互相矛盾的条目对（如「不吃辣」与「能吃微辣」），每条 {aId:"m...", bId:"m...", a:"原文", b:"原文"}，没有就输出 []。
 
-只输出 JSON：{"tags":["..."],"summary":"...","confidence":"medium"}，不要输出其他文字。
+只输出 JSON：{"tags":["..."],"summary":"...","confidence":"medium","merges":[],"conflicts":[]}，不要输出其他文字。
 """
 
 
@@ -70,9 +72,9 @@ def save_record(path, record):
 def build_prompt(record):
     memories = record.get('memories') or []
     old = record.get('insights') or {}
-    lines = ['以下是关于同一位用户的历史记忆条目（来自多次对话）：']
+    lines = ['以下是关于同一位用户的历史记忆条目（来自多次对话，每条带 id 与原文）：']
     for item in memories[-40:]:
-        lines.append('- ' + str(item.get('text', '')))
+        lines.append('- ' + str(item.get('id', '')) + '：' + str(item.get('text', '')))
     if old.get('tags') or old.get('summary'):
         lines.append('')
         lines.append('上一轮已经整理出的认识（可合并更新）：')
@@ -152,6 +154,28 @@ def main():
     tags = [str(tag).strip() for tag in (result.get('tags') or []) if str(tag).strip()][:8]
     summary = str(result.get('summary') or '').strip()[:120]
     confidence = str(result.get('confidence') or 'medium')
+    # v3.6.0：合并建议 / 冲突提醒——只写进 memoryReview 待用户确认，绝不直接改记忆
+    merges = []
+    for item in (result.get('merges') or [])[:5]:
+        if not isinstance(item, dict):
+            continue
+        ids = [str(one) for one in (item.get('ids') or []) if str(one)]
+        suggestion = str(item.get('suggestion') or '').strip()[:200]
+        if len(ids) >= 2 and suggestion:
+            merges.append({'ids': ids, 'suggestion': suggestion})
+    conflicts = []
+    for item in (result.get('conflicts') or [])[:5]:
+        if not isinstance(item, dict):
+            continue
+        a = str(item.get('a') or '').strip()
+        b = str(item.get('b') or '').strip()
+        if a and b and a != b:
+            conflicts.append({
+                'aId': str(item.get('aId') or '').strip(),
+                'bId': str(item.get('bId') or '').strip(),
+                'a': a[:200],
+                'b': b[:200],
+            })
     now = datetime.now(timezone.utc).isoformat()
     record['insights'] = {
         'updated': now,
@@ -160,11 +184,21 @@ def main():
         'confidence': confidence,
         'sourceCount': len(memories),
     }
+    record['memoryReview'] = {
+        'updated': now,
+        'state': 'pending' if (merges or conflicts) else 'none',
+        'merges': merges,
+        'conflicts': conflicts,
+    }
     state = record.setdefault('state', {})
     state['lastDigestAt'] = now
     state['memoriesSinceDigest'] = 0
     save_record(path, record)
     print('[digest] 完成：' + summary)
+    if merges:
+        print('[digest] 合并建议 %d 条' % len(merges))
+    if conflicts:
+        print('[digest] 冲突提醒 %d 条' % len(conflicts))
     return 0
 
 

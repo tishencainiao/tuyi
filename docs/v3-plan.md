@@ -279,3 +279,14 @@
 - ⑨免责声明：行程卡底部「金额与时间仅为估算，仅作参考」。
 - ⑫行程名：生成兜底名改「目的地之旅 · 当天日期」；新增 PUT /api/plans/:id（renameItinerary，1~60 字）与卡片「改名」Modal。
 - 测试：smoke 32/32、unit 25/25（新增回退允许/previousDays diff/改名用例）、lint 0 错、build ✓。
+
+## §11 实施记录（续）
+
+**v3.6.0 记忆治理**
+- 标签黑名单：brain/meta-tags.js（精确词 15 + 包含词 15，cleanTags 去元操作/去重/截断）；抽取（brain/memory.js addFacts）、编辑（memory-edit 工具）、消化（digest.py）、图表聚合（brain/stats.js）四处全链路过滤；存量数据用 scripts/clean-meta-tags.js 一键清洗（--dry-run 预览、--apply 先备份），本次实测清洗 1 个「记忆修改」脏标签。
+- 冲突检测与整理建议：digest.py 消化输出新增 merges（合并建议，ids+suggestion）与 conflicts（冲突对 aId/bId）；写入 record.memoryReview（pending/none）。
+- 主动汇报：renderBlock 注入【待处理的记忆整理建议】；persona.md 新增「记忆整理」节（口语征询、用户确认后才动手、绝不擅自改、同一批最多提一次、用户没兴趣就 dismiss）。
+- 用户确认后执行：新工具 handle_memory_review（apply_merge/keep_first/keep_second/dismiss）；memory.js 新增 getPendingReview/applyMemoryReview。
+- 80 条上限：config.json memory.review_trigger_count=80，digestDue 增条数触发条件。
+- 测试：unit 34/34（新增 memory-review.test.js 9 项）、smoke 35/35（新增 3 项）、check.js 7 工具、digest.py 语法通过。
+- 端到端实测（真实 LLM 一轮）：test1 的两条重复微辣记忆 → 小忆主动问「合并吗？」→ 用户回「合并吧」→ 工具执行 → 两条变一条、review 清零。
