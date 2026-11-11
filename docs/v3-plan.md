@@ -290,3 +290,11 @@
 - 80 条上限：config.json memory.review_trigger_count=80，digestDue 增条数触发条件。
 - 测试：unit 34/34（新增 memory-review.test.js 9 项）、smoke 35/35（新增 3 项）、check.js 7 工具、digest.py 语法通过。
 - 端到端实测（真实 LLM 一轮）：test1 的两条重复微辣记忆 → 小忆主动问「合并吗？」→ 用户回「合并吧」→ 工具执行 → 两条变一条、review 清零。
+
+### v3.7.0 账号个性化与旅行相册（2026-11-11）
+- 删除用户名注册：auth.createUser 用户名分支返回「用户名注册已停用，请使用邮箱或手机号注册（老账号仍可登录）」；注册页只剩邮箱/手机两个页签。
+- 改用户名：auth.updateUsername（2~20 字符、查重忽略大小写且排除自己）；PUT /api/account。
+- 头像：brain/account.js saveAvatar（data:image base64 ≤2MB、按扩展名存 data/avatars/、换扩展名删旧文件）；前端 antd-img-crop 圆形裁剪（P9B）；/avatars/<userId>.<ext> 需登录且只能访问自己。
+- 旅行相册：brain/album.js（data/album/<userId>.json + data/photos/，≤200 张、单张 ≤3MB、备注 ≤60 字；上传可关联行程、改备注、删除；删行程只解除关联不删照片）；新增「相册」页。
+- 测试：unit 43/43（auth 改用户名、account 3 项、album 5 项）、smoke 35/35（3 个账号用例改邮箱注册）、check.js、lint、build 全过。
+- 浏览器实测：注册页两页签；test1 换头像（裁剪弹窗→确定→头部与个人卡片同步更新）；改用户名 小忆测试→改回 test1；相册上传→归类到「北京七天六晚」→备注→删除全链路通过。

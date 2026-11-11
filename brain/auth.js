@@ -120,13 +120,12 @@ function consumeVerifyCode(account, code) {
 function createUser(account, password, options = {}) {
   const rawAccount = account != null ? account : options.username;
   const kind = classifyAccount(rawAccount);
-  if (!kind) return { ok: false, error: '账号格式不对（用户名 2~20 字符，或邮箱，或 11 位手机号）' };
+  if (!kind) return { ok: false, error: '账号格式不对（邮箱，或 11 位手机号）' };
   if (String(password || '').length < 6) return { ok: false, error: '密码至少 6 位' };
+  if (kind.type === 'username') return { ok: false, error: '用户名注册已停用，请使用邮箱或手机号注册（老账号仍可登录）' };
 
-  if (kind.type !== 'username') {
-    const checked = consumeVerifyCode(rawAccount, options.code);
-    if (!checked.ok) return { ok: false, error: checked.error };
-  }
+  const checked = consumeVerifyCode(rawAccount, options.code);
+  if (!checked.ok) return { ok: false, error: checked.error };
 
   const users = loadUsers();
   if (findUserByAccount(users, rawAccount)) {
@@ -200,6 +199,8 @@ function getUserById(userId) {
     phone: user.phone || '',
     onboarded: user.onboarded === true,
     created: user.created || '',
+    avatarExt: user.avatarExt || '',
+    avatarAt: user.avatarAt || '',
   };
 }
 
@@ -211,6 +212,31 @@ function markOnboarded(userId) {
     user.onboarded = true;
     saveUsers(users);
   }
+  return { ok: true };
+}
+
+// v3.7.0：用户名可改（登录账号不变，只改显示名）
+function updateUsername(userId, username) {
+  const name = String(username || '').trim();
+  if (name.length < 2 || name.length > 20) return { ok: false, error: '用户名需 2~20 个字符' };
+  const users = loadUsers();
+  const me = users[userId];
+  if (!me) return { ok: false, error: '用户不存在' };
+  const found = findUserByAccount(users, name);
+  if (found && found[0] !== userId) return { ok: false, error: '用户名已存在' };
+  me.username = name;
+  saveUsers(users);
+  return { ok: true, user: getUserById(userId) };
+}
+
+// v3.7.0：头像元信息（文件由 brain/account.js 管理）
+function setAvatarMeta(userId, ext) {
+  const users = loadUsers();
+  const me = users[userId];
+  if (!me) return { ok: false, error: '用户不存在' };
+  me.avatarExt = ext;
+  me.avatarAt = new Date().toISOString();
+  saveUsers(users);
   return { ok: true };
 }
 
@@ -255,6 +281,8 @@ module.exports = {
   destroySession,
   getUserById,
   markOnboarded,
+  updateUsername,
+  setAvatarMeta,
   parseCookies,
   currentUser,
   sessionCookie,

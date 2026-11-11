@@ -58,9 +58,15 @@ test('邮箱重复注册：拒绝', () => {
   assert.equal(again.ok, false);
 });
 
-test('用户名注册：免验码，可登录，密码不落明文', () => {
-  const created = auth.createUser('unituser', 'pass1234');
+test('用户名注册：已停用（v3.7.0），老账号登录仍可用', () => {
+  const blocked = auth.createUser('unituser', 'pass1234');
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.error, /已停用/);
+  const code = auth.issueVerifyCode('unit@y.com').mockCode;
+  const created = auth.createUser('unit@y.com', 'pass1234', { code });
   assert.ok(created.ok);
+  const renamed = auth.updateUsername(created.userId, 'unituser');
+  assert.ok(renamed.ok);
   const ok = auth.verifyLogin('unituser', 'pass1234');
   assert.ok(ok.ok);
   assert.equal(ok.username, 'unituser');
@@ -69,8 +75,21 @@ test('用户名注册：免验码，可登录，密码不落明文', () => {
   assert.equal(raw[created.userId].hash.includes('pass1234'), false);
 });
 
+test('改用户名：重名拒绝、格式校验', () => {
+  const code1 = auth.issueVerifyCode('n1@y.com').mockCode;
+  const first = auth.createUser('n1@y.com', 'pass1234', { code: code1 });
+  const code2 = auth.issueVerifyCode('n2@y.com').mockCode;
+  const second = auth.createUser('n2@y.com', 'pass1234', { code: code2 });
+  assert.ok(auth.updateUsername(second.userId, 'name-2').ok);
+  const clash = auth.updateUsername(second.userId, 'name-2'); // 自己重名自己可以
+  assert.ok(clash.ok);
+  const other = auth.createUser('n3@y.com', 'pass1234', { code: auth.issueVerifyCode('n3@y.com').mockCode });
+  assert.equal(auth.updateUsername(other.userId, 'NAME-2').ok, false); // 忽略大小写查重
+  assert.equal(auth.updateUsername(first.userId, 'a').ok, false); // 太短
+});
+
 test('markOnboarded：引导标记可写可读', () => {
-  const created = auth.createUser('unituser2', 'pass1234');
+  const created = auth.createUser('unituser2@y.com', 'pass1234', { code: auth.issueVerifyCode('unituser2@y.com').mockCode });
   const before = auth.getUserById(created.userId);
   assert.equal(before.onboarded, false);
   auth.markOnboarded(created.userId);

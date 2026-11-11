@@ -7,6 +7,16 @@ export interface User {
   email?: string;
   phone?: string;
   onboarded?: boolean;
+  avatarUrl?: string;
+}
+
+// v3.7.0 旅行相册照片
+export interface AlbumPhoto {
+  id: string;
+  tripId: string | null;
+  caption: string;
+  ts: string;
+  url: string;
 }
 
 // v3.2.0 个人资料（与 brain/profile.js 契约一致）
@@ -193,6 +203,30 @@ export const api = {
       body: JSON.stringify({ account, password }),
     }),
   logout: () => request<{ ok: boolean }>('/api/logout', { method: 'POST' }),
+
+  // v3.7.0：账号个性化（改用户名 / 换头像）
+  updateAccount: (patch: { username?: string; avatar?: string }) =>
+    request<{ ok: boolean; user: User }>('/api/account', {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(patch),
+    }),
+  // v3.7.0：旅行相册
+  album: () => request<{ photos: AlbumPhoto[] }>('/api/album'),
+  addPhoto: (image: string, tripId?: string | null, caption?: string) =>
+    request<{ ok: boolean; photo: AlbumPhoto }>('/api/album', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ image, tripId: tripId || null, caption }),
+    }),
+  updatePhoto: (id: string, patch: { tripId?: string | null; caption?: string }) =>
+    request<{ ok: boolean; photo: AlbumPhoto }>('/api/album/' + encodeURIComponent(id), {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(patch),
+    }),
+  removePhoto: (id: string) =>
+    request<{ ok: boolean }>('/api/album/' + encodeURIComponent(id), { method: 'DELETE' }),
 
   userinfo: () => request<UserInfoResponse>('/api/userinfo'),
   updateUserinfo: (patch: Partial<UserInfo>) =>

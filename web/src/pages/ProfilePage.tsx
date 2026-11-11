@@ -18,7 +18,9 @@ import {
   Spin,
   Tag,
   Typography,
+  Upload,
 } from 'antd';
+import ImgCrop from 'antd-img-crop';
 import {
   DeleteOutlined,
   EditOutlined,
@@ -30,6 +32,7 @@ import { api, ApiError, MemoryItem, PlanStatus, Profile, UserInfo, UserInfoRespo
 import { useApp } from '../store';
 import PlanCard from '../components/PlanCard';
 import ProfileForm from '../components/ProfileForm';
+import { fileToDataUrl } from '../imageUtil';
 
 function formatDate(value: string) {
   return value ? value.slice(0, 10) : '—';
@@ -39,10 +42,18 @@ export default function ProfilePage() {
   const { message } = App.useApp();
   const navigate = useNavigate();
   const logout = useApp((state) => state.logout);
+  const setUser = useApp((state) => state.setUser);
+  const user = useApp((state) => state.user);
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // v3.7.0 账号个性化：改用户名 / 换头像
+  const [usernameEditOpen, setUsernameEditOpen] = useState(false);
+  const [usernameValue, setUsernameValue] = useState('');
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   // v3.2.0 个人资料（引导页/个人中心共用同一份数据）
   const [userInfo, setUserInfo] = useState<UserInfoResponse | null>(null);
@@ -74,6 +85,41 @@ export default function ProfilePage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleUsernameSave = async () => {
+    const name = usernameValue.trim();
+    if (name.length < 2 || name.length > 20) {
+      message.warning('用户名需 2~20 个字符');
+      return;
+    }
+    setAccountSaving(true);
+    try {
+      const data = await api.updateAccount({ username: name });
+      setUser(data.user);
+      setUsernameEditOpen(false);
+      message.success('用户名已更新');
+      load();
+    } catch (err) {
+      message.error(err instanceof ApiError ? err.message : '修改失败');
+    } finally {
+      setAccountSaving(false);
+    }
+  };
+
+  const handleAvatar = async (file: File) => {
+    setAvatarUploading(true);
+    try {
+      const avatar = await fileToDataUrl(file, 512); // 头像 512px 足够，且裁剪后更小
+      const data = await api.updateAccount({ avatar });
+      setUser(data.user);
+      message.success('头像已更新');
+      load();
+    } catch (err) {
+      message.error(err instanceof ApiError ? err.message : '头像上传失败');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   const addMemory = async () => {
     const text = newText.trim();
@@ -221,9 +267,61 @@ export default function ProfilePage() {
         <Col xs={24} md={9}>
           <Card title="个人信息" size="small" style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-              <Avatar size={48} style={{ background: '#0ea5e9' }} icon={<UserOutlined />} />
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 600 }}>{profile.username}</div>
+              <ImgCrop
+                rotationSlider
+                cropShape="round"
+                aspect={1}
+                modalTitle="裁剪头像"
+                modalOk="确定"
+                modalCancel="取消"
+              >
+                <Upload
+                  accept="image/*"
+                  showUploadList={false}
+                  beforeUpload={(file) => {
+                    handleAvatar(file);
+                    return false;
+                  }}
+                >
+                  <div style={{ cursor: 'pointer', position: 'relative' }}>
+                    <Avatar
+                      size={56}
+                      src={user?.avatarUrl || undefined}
+                      style={{ background: '#0ea5e9' }}
+                      icon={user?.avatarUrl ? undefined : <UserOutlined />}
+                    />
+                    <span
+                      style={{
+                        position: 'absolute',
+                        right: -4,
+                        bottom: -4,
+                        fontSize: 12,
+                        background: '#fff',
+                        border: '1px solid var(--tuyi-line)',
+                        borderRadius: 8,
+                        padding: '0 4px',
+                      }}
+                    >
+                      {avatarUploading ? '…' : '换头像'}
+                    </span>
+                  </div>
+                </Upload>
+              </ImgCrop>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 16, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {profile.username}
+                  </span>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => {
+                      setUsernameValue(profile.username);
+                      setUsernameEditOpen(true);
+                    }}
+                  />
+                </div>
                 <div className="muted">ID：{profile.userId}</div>
               </div>
             </div>
@@ -423,6 +521,19 @@ export default function ProfilePage() {
           )}
         />
       </Card>
+
+      <Modal
+        title="修改用户名"
+        open={usernameEditOpen}
+        onCancel={() => setUsernameEditOpen(false)}
+        onOk={handleUsernameSave}
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={accountSaving}
+      >
+        <p className="muted">登录账号不变，这里只改显示的名字（2~20 个字符）。</p>
+        <Input value={usernameValue} onChange={(e) => setUsernameValue(e.target.value)} maxLength={20} />
+      </Modal>
 
       <Modal
         title="编辑个人资料"

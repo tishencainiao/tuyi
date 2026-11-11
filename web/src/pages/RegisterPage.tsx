@@ -1,8 +1,8 @@
-// v3.2.0 注册页：用户名 / 邮箱 / 手机号三种方式；邮箱与手机走模拟验证码
+// v3.7.0 注册页：邮箱 / 手机号两种方式（用户名注册已停用，老账号仍可登录）；邮箱与手机走模拟验证码
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { App, Alert, Button, Card, Form, Input, Tabs, Typography } from 'antd';
-import { LockOutlined, MailOutlined, MobileOutlined, SafetyOutlined, UserOutlined } from '@ant-design/icons';
+import { LockOutlined, MailOutlined, MobileOutlined, SafetyOutlined } from '@ant-design/icons';
 import { api, ApiError } from '../api';
 import { useApp } from '../store';
 
@@ -22,7 +22,7 @@ export default function RegisterPage() {
   const [sending, setSending] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [mockCode, setMockCode] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'username' | 'email' | 'phone'>('username');
+  const [activeTab, setActiveTab] = useState<'email' | 'phone'>('email');
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -88,10 +88,6 @@ export default function RegisterPage() {
   };
 
   const accountRules = {
-    username: [
-      { required: true, message: '请输入用户名' },
-      { min: 2, max: 20, message: '用户名需 2~20 个字符' },
-    ],
     email: [
       { required: true, message: '请输入邮箱' },
       { type: 'email' as const, message: '邮箱格式不正确' },
@@ -103,15 +99,6 @@ export default function RegisterPage() {
   }[activeTab];
 
   const tabItems = [
-    {
-      key: 'username',
-      label: '用户名注册',
-      children: (
-        <Form.Item name="account" label="用户名" rules={accountRules}>
-          <Input prefix={<UserOutlined />} placeholder="2~20 个字符" maxLength={20} autoComplete="off" />
-        </Form.Item>
-      ),
-    },
     {
       key: 'email',
       label: '邮箱注册',

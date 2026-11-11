@@ -19,6 +19,13 @@
  *   GET  /api/profile                         本人画像 / 记忆 / 行程
  *   GET  /api/stats/personal                  个人统计
  *   GET  /api/visits                          去过地（手动点亮）
+ *   PUT  /api/account  {username?, avatar?}    v3.7.0 改用户名 / 换头像（base64）
+ *   GET  /api/album                            v3.7.0 旅行相册照片列表
+ *   POST /api/album    {image, tripId?, caption?}  上传照片（base64）
+ *   PUT  /api/album/:id  {tripId?, caption?}   改分类 / 备注
+ *   DELETE /api/album/:id                      删除照片
+ *   GET  /avatars/<userId>.<ext>               头像（仅本人）
+ *   GET  /photos/<userId>-<photoId>.<ext>      相册图片（仅本人）
  *   GET  /api/health                          健康检查（无需登录）
  */
 
@@ -40,6 +47,8 @@ const memory = require('./brain/memory');
 const stats = require('./brain/stats');
 const auth = require('./brain/auth');
 const profile = require('./brain/profile');
+const account = require('./brain/account');
+const album = require('./brain/album');
 
 // ---- 简易限流（v3.4.0）：按 IP 滑动窗口，只对 /api/chat 生效 ----
 const rateCfg = (cfg.server && cfg.server.rate_limit) || {};
@@ -141,9 +150,9 @@ function readBody(req, limit = 1024 * 1024) {
   });
 }
 
-async function readJsonBody(req) {
+async function readJsonBody(req, limit = 1024 * 1024) {
   try {
-    const raw = await readBody(req);
+    const raw = await readBody(req, limit);
     return raw ? JSON.parse(raw) : {};
   } catch {
     return null;
@@ -194,7 +203,89 @@ function handleLogout(req, res) {
 function handleMe(req, res) {
   const user = currentUser(req);
   if (!user) return sendJSON(res, 401, { error: '未登录' });
-  return sendJSON(res, 200, { user });
+  const avatarUrl = user.avatarExt
+    ? '/avatars/' + user.userId + '.' + user.avatarExt + '?v=' + encodeURIComponent(user.avatarAt || '')
+    : '';
+  return sendJSON(res, 200, { user: { ...user, avatarUrl } });
+}
+
+// v3.7.0：账号个性化（改用户名 / 换头像，可选字段分别生效）
+async function handleAccountPut(req, res) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const body = await readJsonBody(req, 4 * 1024 * 1024); // 头像 base64 较大
+  if (!body) return sendJSON(res, 400, { error: '请求体不是合法 JSON' });
+  let changed = false;
+  if (body.username != null && body.username !== '') {
+    const result = account.updateUsername(user.userId, body.username);
+    if (!result.ok) return sendJSON(res, 400, { error: result.error });
+    user.username = result.user.username;
+    changed = true;
+  }
+  if (body.avatar != null && body.avatar !== '') {
+    const result = account.saveAvatar(user.userId, body.avatar);
+    if (!result.ok) return sendJSON(res, 400, { error: result.error });
+    user.avatarExt = result.ext;
+    user.avatarAt = new Date().toISOString();
+    changed = true;
+  }
+  if (!changed) return sendJSON(res, 400, { error: '没有要修改的内容' });
+  const avatarUrl = user.avatarExt
+    ? '/avatars/' + user.userId + '.' + user.avatarExt + '?v=' + encodeURIComponent(user.avatarAt || '')
+    : '';
+  return sendJSON(res, 200, { ok: true, user: { ...user, avatarUrl } });
+}
+
+// 头像 / 相册图片：只能看自己的
+function serveUserFile(req, res, match, dir, mime) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  if (!match[1].startsWith(user.userId + '-') && match[1] !== user.userId) {
+    return sendJSON(res, 403, { error: '无权访问' });
+  }
+  const file = path.join(dir, match[1] + '.' + match[2]);
+  if (!fs.existsSync(file)) return sendJSON(res, 404, { error: '文件不存在' });
+  res.writeHead(200, {
+    'Content-Type': mime,
+    'Cache-Control': 'private, max-age=3600',
+  });
+  return fs.createReadStream(file).pipe(res);
+}
+
+// ---- 旅行相册（v3.7.0）----
+
+function handleAlbumList(req, res) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  return sendJSON(res, 200, { photos: album.listPhotos(user.userId) });
+}
+
+async function handleAlbumCreate(req, res) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const body = await readJsonBody(req, 6 * 1024 * 1024); // 照片 base64 较大
+  if (!body) return sendJSON(res, 400, { error: '请求体不是合法 JSON' });
+  const result = album.addPhoto(user.userId, body.image, body.tripId, body.caption);
+  if (!result.ok) return sendJSON(res, 400, { error: result.error });
+  return sendJSON(res, 200, { ok: true, photo: result.photo });
+}
+
+async function handleAlbumUpdate(req, res, id) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const body = await readJsonBody(req);
+  if (!body) return sendJSON(res, 400, { error: '请求体不是合法 JSON' });
+  const result = album.setPhotoMeta(user.userId, id, body || {});
+  if (!result.ok) return sendJSON(res, 400, { error: result.error });
+  return sendJSON(res, 200, { ok: true, photo: result.photo });
+}
+
+function handleAlbumRemove(req, res, id) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  const result = album.removePhoto(user.userId, id);
+  if (!result.ok) return sendJSON(res, 400, { error: result.error });
+  return sendJSON(res, 200, { ok: true });
 }
 
 function handleUserinfoGet(req, res) {
@@ -363,6 +454,7 @@ function handlePlanRemove(req, res, id) {
   if (!user) return sendJSON(res, 401, { error: '未登录' });
   const result = memory.removeItinerary(user.userId, id);
   if (!result.ok) return sendJSON(res, 400, { error: result.error });
+  album.unlinkTrip(user.userId, id); // v3.7.0：照片只解除关联，不删除
   return sendJSON(res, 200, { ok: true });
 }
 
@@ -419,6 +511,12 @@ const server = http.createServer((req, res) => {
   if (method === 'POST' && pathname === '/api/login') return handleLogin(req, res);
   if (method === 'POST' && pathname === '/api/logout') return handleLogout(req, res);
   if (method === 'GET' && pathname === '/api/me') return handleMe(req, res);
+  if (method === 'PUT' && pathname === '/api/account') return handleAccountPut(req, res);
+  if (method === 'GET' && pathname === '/api/album') return handleAlbumList(req, res);
+  if (method === 'POST' && pathname === '/api/album') return handleAlbumCreate(req, res);
+  const photoPath = pathname.match(/^\/api\/album\/([^/]+)$/);
+  if (photoPath && method === 'PUT') return handleAlbumUpdate(req, res, decodeURIComponent(photoPath[1]));
+  if (photoPath && method === 'DELETE') return handleAlbumRemove(req, res, decodeURIComponent(photoPath[1]));
   if (method === 'GET' && pathname === '/api/userinfo') return handleUserinfoGet(req, res);
   if (method === 'PUT' && pathname === '/api/userinfo') return handleUserinfoPut(req, res);
   if (method === 'POST' && pathname === '/api/onboard') return handleOnboard(req, res);
@@ -457,6 +555,16 @@ const server = http.createServer((req, res) => {
       '/login.html': '/login',
     };
     if (LEGACY_REDIRECTS[pathname]) return redirect(res, LEGACY_REDIRECTS[pathname]);
+
+    // 头像与相册图片（登录后按归属校验）
+    const avatarPath = pathname.match(/^\/avatars\/([A-Za-z0-9-]+)\.(png|jpg|webp)$/);
+    if (avatarPath) {
+      return serveUserFile(req, res, avatarPath, path.join(ROOT, 'data', 'avatars'), 'image/' + (avatarPath[2] === 'jpg' ? 'jpeg' : avatarPath[2]));
+    }
+    const userPhotoPath = pathname.match(/^\/photos\/([A-Za-z0-9-]+)\.(png|jpg|webp)$/);
+    if (userPhotoPath) {
+      return serveUserFile(req, res, userPhotoPath, album.PHOTO_DIR, 'image/' + (userPhotoPath[2] === 'jpg' ? 'jpeg' : userPhotoPath[2]));
+    }
 
     // 静态资源（登录页也需要）
     if (

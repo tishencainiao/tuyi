@@ -290,11 +290,13 @@ const sample = {
     process.env.TUYI_DATA_DIR = tmp;
     try {
       const auth = require('../brain/auth');
-      const reg = auth.createUser('tester', 'secret123');
-      assert.strictEqual(reg.ok, true);
+      // v3.7.0：用户名注册已停用，邮箱注册需验证码
       assert.strictEqual(auth.createUser('tester', 'secret123').ok, false);
-      assert.strictEqual(auth.verifyLogin('tester', 'secret123').ok, true);
-      assert.strictEqual(auth.verifyLogin('tester', 'wrong-pass').ok, false);
+      const code = auth.issueVerifyCode('tester@smoke.com').mockCode;
+      const reg = auth.createUser('tester@smoke.com', 'secret123', { code });
+      assert.strictEqual(reg.ok, true);
+      assert.strictEqual(auth.verifyLogin('tester@smoke.com', 'secret123').ok, true);
+      assert.strictEqual(auth.verifyLogin('tester@smoke.com', 'wrong-pass').ok, false);
       const token = auth.createSession(reg.userId);
       assert.ok(auth.getSession(token));
       auth.destroySession(token);
@@ -437,18 +439,20 @@ const sample = {
     assert.ok(dup.error.includes('已注册'));
   });
 
-  await check('账号：用户名注册免验证码 + 邮箱登录 + 密码校验', () => {
+  await check('账号：用户名注册已停用 + 邮箱登录 + 密码校验', () => {
     const auth = require('../brain/auth');
-    const created = auth.createUser('smokeuser32', '123456');
-    assert.strictEqual(created.ok, true);
-    assert.strictEqual(auth.verifyLogin('smokeuser32', '123456').ok, true);
+    // v3.7.0：用户名注册停用
+    const blocked = auth.createUser('smokeuser32', '123456');
+    assert.strictEqual(blocked.ok, false);
+    assert.ok(blocked.error.includes('已停用'));
     assert.strictEqual(auth.verifyLogin('tuyi-v32@test.com', '123456').ok, true);
-    assert.strictEqual(auth.verifyLogin('smokeuser32', 'badbad').ok, false);
+    assert.strictEqual(auth.verifyLogin('tuyi-v32@test.com', 'badbad').ok, false);
   });
 
   await check('账号：onboarded 引导标记可写可读', () => {
     const auth = require('../brain/auth');
-    const created = auth.createUser('smokeonboard', '123456');
+    const code = auth.issueVerifyCode('smokeonboard@test.com').mockCode;
+    const created = auth.createUser('smokeonboard@test.com', '123456', { code });
     assert.strictEqual(created.ok, true);
     assert.strictEqual(auth.getUserById(created.userId).onboarded, false);
     auth.markOnboarded(created.userId);

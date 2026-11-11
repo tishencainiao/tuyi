@@ -9,6 +9,7 @@ import OnboardingPage from './pages/OnboardingPage';
 import ChatPage from './pages/ChatPage';
 import TravelPage from './pages/TravelPage';
 import ProfilePage from './pages/ProfilePage';
+import AlbumPage from './pages/AlbumPage';
 
 function displayName(user: { username?: string; email?: string; phone?: string } | null) {
   if (!user) return '我';
@@ -27,6 +28,7 @@ function AppShell({ children }: { children: ReactNode }) {
   const navItems = [
     { path: '/', label: '聊天' },
     { path: '/travel', label: '我的旅行' },
+    { path: '/album', label: '相册' },
     { path: '/profile', label: '个人中心' },
   ];
   const isActive = (path: string) => (path === '/' ? location.pathname === '/' : location.pathname.startsWith(path));
@@ -58,7 +60,12 @@ function AppShell({ children }: { children: ReactNode }) {
           }}
         >
           <a style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-            <Avatar size={28} style={{ background: '#0ea5e9' }} icon={<UserOutlined />} />
+            <Avatar
+              size={28}
+              src={user?.avatarUrl || undefined}
+              style={{ background: '#0ea5e9' }}
+              icon={user?.avatarUrl ? undefined : <UserOutlined />}
+            />
             <span style={{ fontSize: 14 }}>{displayName(user)}</span>
           </a>
         </Dropdown>
@@ -114,6 +121,14 @@ export default function App() {
         element={
           <Protected>
             <TravelPage />
+          </Protected>
+        }
+      />
+      <Route
+        path="/album"
+        element={
+          <Protected>
+            <AlbumPage />
           </Protected>
         }
       />
