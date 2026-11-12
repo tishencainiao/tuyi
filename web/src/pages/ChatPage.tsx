@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { App, Button, Input, Spin, Tag } from 'antd';
-import { SendOutlined } from '@ant-design/icons';
+import { App, Button, Input, Select, Spin, Tag } from 'antd';
+import { MessageOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
-import { api, chatStream, Itinerary, PlanStatus } from '../api';
+import { api, chatStream, Conversation, Itinerary, PlanStatus } from '../api';
 import PlanCard from '../components/PlanCard';
 
 interface Msg {
@@ -44,6 +44,9 @@ const IDLE_AFTER_MS = 30000;
 const VIDEO_SWITCH_MS = 30000;
 const WORK_VIDEOS = ['work-map', 'work-hand-plan', 'work-typing'];
 const IDLE_VIDEOS = ['idle-nap', 'idle-milktea', 'idle-spin'];
+
+// v3.8.0：当前对话存 localStorage，刷新后回到上次的对话
+const CONV_KEY = 'tuyi-conversation-id';
 
 /** 小忆动态形象：生成方案时播工作动作；30 秒没动静播休闲动作；平时隐藏。 */
 function XiaoyiLive({ busy, lastActivity }: { busy: boolean; lastActivity: number }) {
@@ -91,6 +94,15 @@ function XiaoyiLive({ busy, lastActivity }: { busy: boolean; lastActivity: numbe
 
 export default function ChatPage() {
   const { message } = App.useApp();
+  // v3.8.0：对话维度状态
+  const [conversationId, setConversationId] = useState<string>(() => {
+    try {
+      return localStorage.getItem(CONV_KEY) || 'default';
+    } catch {
+      return 'default';
+    }
+  });
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [plans, setPlans] = useState<Itinerary[]>([]);
   const [tool, setTool] = useState<ToolState | null>(null);
@@ -100,13 +112,35 @@ export default function ChatPage() {
   const [lastActivity, setLastActivity] = useState(() => Date.now());
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const persistConversation = (id: string) => {
+    try {
+      localStorage.setItem(CONV_KEY, id);
+    } catch {
+      /* 隐私模式等场景忽略 */
+    }
+  };
+
   useEffect(() => {
     let alive = true;
-    Promise.all([api.history('default', 60), api.plans()])
-      .then(([history, planData]) => {
+    Promise.all([api.conversations(), api.plans()])
+      .then(([convData, planData]) => {
+        if (!alive) return;
+        setConversations(convData.conversations);
+        setPlans(
+          planData.plans.filter((plan) => (plan.conversationId || 'default') === conversationId),
+        );
+      })
+      .catch(() => {
+        if (alive) {
+          setConversations([{ id: 'default', title: '默认对话', lastTs: '', count: 0 }]);
+          setPlans([]);
+        }
+      });
+    api
+      .history(conversationId, 60)
+      .then((history) => {
         if (!alive) return;
         setMessages(history.turns.map((turn) => ({ role: turn.role, text: turn.text, ts: turn.ts })));
-        setPlans(planData.plans);
       })
       .catch(() => {
         if (alive) setMessages([]);
@@ -117,7 +151,10 @@ export default function ChatPage() {
     return () => {
       alive = false;
     };
-  }, []);
+    // conversationId 变化即重新加载该对话（切换对话时 loaded 会短暂回到 false）
+    // 注意：此 effect 有意只依赖 conversationId（挂载即加载，切换时重载），
+    // 不要在依赖里加其他状态。
+  }, [conversationId]);
 
   const timeline = useMemo<TimelineItem[]>(() => {
     const items: TimelineItem[] = [
@@ -133,8 +170,9 @@ export default function ChatPage() {
       })),
     ];
     items.sort((a, b) => {
-      const at = a.kind === 'msg' ? a.msg.ts || '' : a.plan.ts || '';
-      const bt = b.kind === 'msg' ? b.msg.ts || '' : b.plan.ts || '';
+      // v3.8.0：行程卡用 updatedAt 排序（修改后原地刷新，不产生新 ts）
+      const at = a.kind === 'msg' ? a.msg.ts || '' : a.plan.updatedAt || a.plan.ts || '';
+      const bt = b.kind === 'msg' ? b.msg.ts || '' : b.plan.updatedAt || b.plan.ts || '';
       // 没有 ts 的（正在流式输出）始终排最后
       if (!at && bt) return 1;
       if (at && !bt) return -1;
@@ -206,6 +244,47 @@ export default function ChatPage() {
     }
   };
 
+  // v3.8.0：切换对话——清空当前渲染、换历史与行程
+  const switchConversation = (id: string) => {
+    if (id === conversationId || sending) return;
+    setConversationId(id);
+    persistConversation(id);
+    setMessages([]);
+    setPlans([]);
+    setTool(null);
+    setLoaded(false);
+    setLastActivity(Date.now());
+  };
+
+  // v3.8.0：新对话 = 新旅途（对话列表由服务端从消息派生，第一句话后自动出现）
+  const newConversation = () => {
+    if (sending) return;
+    let id: string;
+    try {
+      id = crypto.randomUUID();
+    } catch {
+      id = 'c-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    }
+    setConversationId(id);
+    persistConversation(id);
+    setMessages([]);
+    setPlans([]);
+    setTool(null);
+    setLoaded(true);
+    setInput('');
+    setLastActivity(Date.now());
+  };
+
+  // v3.8.0：一轮对话结束后刷新对话列表（新对话的首条消息会成为它的标题）
+  const refreshConversations = () => {
+    api
+      .conversations()
+      .then((data) => setConversations(data.conversations))
+      .catch(() => {
+        /* 列表刷新失败不打扰聊天 */
+      });
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
@@ -235,7 +314,8 @@ export default function ChatPage() {
     };
 
     try {
-      await chatStream(text, 'default', {
+      // v3.8.0：消息带当前对话 id
+      await chatStream(text, conversationId, {
         onDelta: (chunk) => {
           setTool(null);
           appendAssistant(chunk);
@@ -253,6 +333,7 @@ export default function ChatPage() {
           setTool(null);
           patchAssistant({ streaming: false });
           setLastActivity(Date.now());
+          refreshConversations();
         },
         onError: (errorText) => {
           setTool(null);
@@ -286,8 +367,37 @@ export default function ChatPage() {
     return <ReactMarkdown>{msg.text}</ReactMarkdown>;
   };
 
+  // v3.8.0：对话下拉的选项——刚创建还没消息的对话补一条占位，避免 Select 显示原始 id
+  const convOptions = useMemo(() => {
+    const list = [...conversations];
+    if (!list.some((item) => item.id === conversationId)) {
+      list.unshift({ id: conversationId, title: '新对话', lastTs: '', count: 0 });
+    }
+    return list.map((item) => ({
+      value: item.id,
+      label: item.id === 'default' ? '默认对话' : item.title,
+    }));
+  }, [conversations, conversationId]);
+
   return (
     <div className="chat-page">
+      <div className="chat-conv-bar">
+        <Select
+          size="small"
+          style={{ minWidth: 180, maxWidth: 320, flex: 1 }}
+          value={conversationId}
+          onChange={switchConversation}
+          options={convOptions}
+          disabled={sending}
+          popupMatchSelectWidth={false}
+          suffixIcon={<MessageOutlined />}
+        />
+        <Button size="small" icon={<PlusOutlined />} onClick={newConversation} disabled={sending}>
+          新对话
+        </Button>
+        <span className="muted chat-conv-hint">一个对话一份旅途，新旅程就开新对话</span>
+      </div>
+
       <div className="chat-messages" ref={scrollRef}>
         {!loaded ? (
           <div className="centered-spin">

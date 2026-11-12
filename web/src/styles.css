@@ -150,6 +150,22 @@ body {
   padding: 0 16px;
 }
 
+/* v3.8.0：对话切换条（一个对话一份旅途） */
+.chat-conv-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 4px 4px;
+  border-bottom: 1px solid var(--tuyi-line);
+}
+
+.chat-conv-hint {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .chat-messages {
   flex: 1;
   overflow-y: auto;

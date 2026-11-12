@@ -22,8 +22,8 @@ const MAX_TURNS = 120;
 const MAX_MEMORIES = 200;
 const MAX_ITINERARIES = 20;
 
-// 记忆文件 schema 版本（v3.4.0）：1=初始，2=行程带 id/status/时间字段
-const CURRENT_SCHEMA = 2;
+// 记忆文件 schema 版本（v3.4.0）：1=初始，2=行程带 id/status/时间字段，3=行程带 conversationId（v3.8.0）
+const CURRENT_SCHEMA = 3;
 
 // 行程状态机（v3.1.0）：生成后是草稿，用户确认后才算数
 // v3.5.0：改为全连通——任意状态可回退到其他状态（回退由前端确认框把关）
@@ -117,6 +117,32 @@ function getHistory(userId, conversationId = 'default', limit = 40) {
     .slice(-Math.max(1, Number(limit) || 40));
 }
 
+// v3.8.0：对话列表从 turns 派生（零迁移、无新存储）。
+// 标题取该对话第一条 user 消息截断 12 字；老对话首条被 MAX_TURNS 裁掉时兜底「未命名对话」。
+function listConversations(userId) {
+  const record = load(userId);
+  const byId = new Map();
+  for (const turn of record.turns || []) {
+    const id = String(turn.conversationId || 'default');
+    const item = byId.get(id) || { id, title: null, firstUserText: null, lastTs: '', count: 0 };
+    if (turn.role === 'user' && item.firstUserText === null) item.firstUserText = String(turn.text || '');
+    if (String(turn.ts || '') > item.lastTs) item.lastTs = String(turn.ts || '');
+    item.count += 1;
+    byId.set(id, item);
+  }
+  const list = [...byId.values()]
+    .map((item) => ({
+      id: item.id,
+      title: (item.firstUserText || '').slice(0, 12) || (item.id === 'default' ? '默认对话' : '未命名对话'),
+      lastTs: item.lastTs,
+      count: item.count,
+    }))
+    .sort((a, b) => String(b.lastTs).localeCompare(String(a.lastTs)));
+  // default 恒在（即使用户还没在默认对话说过话），方便前端初始渲染
+  if (!byId.has('default')) list.unshift({ id: 'default', title: '默认对话', lastTs: '', count: 0 });
+  return list;
+}
+
 function normalizeFact(text) {
   return String(text || '')
     .replace(/[\s，。,.!！?？、；;：:"'“”‘’]/g, '')
@@ -174,6 +200,8 @@ function ensureItineraryShape(record) {
     }
     if (!itinerary.createdAt) itinerary.createdAt = itinerary.ts || new Date().toISOString();
     if (!itinerary.updatedAt) itinerary.updatedAt = itinerary.createdAt;
+    // v3.8.0：行程归属对话（惰性迁移——读时补默认值，不为此单独重写文件）
+    if (!itinerary.conversationId) itinerary.conversationId = 'default';
   }
   // v3.4.0：schema 版本号（历史文件无该字段，补上并落盘；未来迁移按版本写）
   if (record.schemaVersion !== CURRENT_SCHEMA) {
@@ -200,6 +228,14 @@ function upsertItinerary(userId, itinerary, options = {}) {
   if (mode === 'update') {
     const target = findPlan(record, planId);
     if (!target) return { ok: false, error: '找不到要修改的行程（plan_id=' + planId + '），请先用 get_plan 确认' };
+    // v3.8.0：已完成的行程不能直接修改（落库层硬底线），必须先退回状态
+    if (target.status === PLAN_STATUS.COMPLETED) {
+      return {
+        ok: false,
+        error:
+          '这份行程已完成，不能直接修改；请先征得用户同意，用 update_plan_status 退回状态（如 draft），退回后再调用 plan_trip(mode:"update")',
+      };
+    }
     const before = {
       title: target.title,
       destination: target.destination,
@@ -242,6 +278,8 @@ function upsertItinerary(userId, itinerary, options = {}) {
     destination: String(itinerary.destination),
     budget_cny: Number(itinerary.budget_cny) || 0,
     days: itinerary.days.slice(0, 10),
+    // v3.8.0：行程归属生成它的对话（旧数据 load 时惰性补 'default'）
+    conversationId: String(options.conversationId || itinerary.conversationId || 'default'),
   };
   record.itineraries.push(stored);
   if (record.itineraries.length > MAX_ITINERARIES) {
@@ -291,7 +329,8 @@ function removeItinerary(userId, planId) {
   }
   record.itineraries = record.itineraries.filter((item) => String(item.id) !== String(planId));
   // v3.5.0：删除后补一条记事，让小忆知道这件事（时间线里不再有它）
-  appendTurn(record, 'assistant', '记事：用户删除了行程方案「' + plan.title + '」。', 'default');
+  // v3.8.0：记事写进该行程所属对话，不再一律串到 default
+  appendTurn(record, 'assistant', '记事：用户删除了行程方案「' + plan.title + '」。', plan.conversationId || 'default');
   save(record);
   return { ok: true, removed: plan };
 }
@@ -652,6 +691,7 @@ module.exports = {
   save,
   appendTurn,
   getHistory,
+  listConversations,
   addFacts,
   PLAN_STATUS,
   STATUS_FLOW,

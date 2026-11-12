@@ -126,6 +126,8 @@ async function* runAgent({ cfg, userId, userText, conversationId = 'default' }) 
           const stored = memory.upsertItinerary(userId, result.itinerary, {
             mode: result.itinerary.mode,
             planId: result.itinerary.id,
+            // v3.8.0：行程归属当前对话（工具已回传，这里再兜底一次）
+            conversationId: result.itinerary.conversationId || conversationId,
           });
           if (stored && stored.ok && stored.itinerary) {
             result.itinerary = stored.itinerary;

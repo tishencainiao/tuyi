@@ -98,10 +98,26 @@ export default function PlanCard({
     if (!onStatus && !onRevise && !onDelete && !onRename) return null;
     return (
       <Space wrap size={4}>
-        {onRevise ? (
+        {onRevise && status !== 'completed' ? (
           <Button size="small" icon={<EditOutlined />} onClick={() => onRevise(itinerary)}>
             在这基础上修改
           </Button>
+        ) : null}
+        {/* v3.8.0：已完成行程不能直接修改，主按钮改为「退回并修改」（默认退回草稿） */}
+        {onRevise && onStatus && status === 'completed' ? (
+          <Popconfirm
+            title="这份行程已完成，不能直接修改。退回草稿后再修改？"
+            okText="退回并修改"
+            cancelText="取消"
+            onConfirm={() => {
+              onStatus(itinerary, 'draft');
+              onRevise(itinerary);
+            }}
+          >
+            <Button size="small" type="primary" icon={<RollbackOutlined />}>
+              退回并修改
+            </Button>
+          </Popconfirm>
         ) : null}
         {onStatus && status === 'draft' ? (
           <Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => onStatus(itinerary, 'confirmed')}>

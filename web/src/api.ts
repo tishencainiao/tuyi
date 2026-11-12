@@ -84,6 +84,14 @@ export interface Itinerary {
   revisions?: number;
   createdAt?: string;
   updatedAt?: string;
+  conversationId?: string; // v3.8.0 行程归属的对话
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  lastTs: string;
+  count: number;
 }
 
 export interface Plan extends Itinerary {
@@ -264,6 +272,8 @@ export const api = {
 
   // v3.1.0 行程方案状态机
   plans: () => request<{ plans: Plan[] }>('/api/plans'),
+  // v3.8.0 对话列表（从服务端 turns 派生）
+  conversations: () => request<{ conversations: Conversation[] }>('/api/conversations'),
   setPlanStatus: (id: string, status: PlanStatus) =>
     request<{ ok: boolean; itinerary: Plan }>('/api/plans/' + encodeURIComponent(id) + '/status', {
       method: 'PUT',

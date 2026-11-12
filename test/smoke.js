@@ -245,8 +245,48 @@ const sample = {
     assert.strictEqual(list.length, 1, '修改不产生新方案');
   });
 
-  await check('行程改名（v3.5.0）', () => {
+  await check('行程：已完成不可直接修改（v3.8.0）', () => {
     const memory = require('../brain/memory');
+    const record = memory.emptyRecord('smoke-lock');
+    const created = memory.upsertItinerary(record.userId, { destination: '北京', days: [{}] }, { mode: 'create' });
+    const planId = created.itinerary.id;
+    memory.setItineraryStatus(record.userId, planId, 'completed');
+
+    const locked = memory.upsertItinerary(record.userId, {
+      id: planId, destination: '北京', days: [{}],
+    }, { mode: 'update', planId });
+    assert.strictEqual(locked.ok, false, 'completed 落库层应拒绝修改');
+    assert.match(String(locked.error), /已完成/);
+
+    // 退回 draft 后可以改
+    const back = memory.setItineraryStatus(record.userId, planId, 'draft');
+    assert.strictEqual(back.ok, true);
+    const revised = memory.upsertItinerary(record.userId, {
+      id: planId, destination: '北京', days: [{}],
+    }, { mode: 'update', planId });
+    assert.strictEqual(revised.ok, true, '退回后应能修改');
+  });
+
+  await check('行程：对话归属与列表（v3.8.0）', () => {
+    const memory = require('../brain/memory');
+    const record = memory.emptyRecord('smoke-conv');
+    memory.appendTurn(record, 'user', '帮我排一个杭州行程', 'c-hangzhou');
+    memory.appendTurn(record, 'assistant', '好的', 'c-hangzhou');
+    memory.save(record); // listConversations 走 load(userId)，需要先落盘
+    const created = memory.upsertItinerary(record.userId, { destination: '杭州', days: [{}] }, { mode: 'create', conversationId: 'c-hangzhou' });
+    assert.strictEqual(created.itinerary.conversationId, 'c-hangzhou', 'create 应记录对话归属');
+    // 旧数据无 conversationId → 惰性补 default
+    const legacy = memory.upsertItinerary(record.userId, { destination: '成都', days: [{}] }, { mode: 'create' });
+    assert.strictEqual(legacy.itinerary.conversationId, 'default');
+
+    const list = memory.listConversations(record.userId);
+    const hangzhou = list.find((item) => item.id === 'c-hangzhou');
+    assert.ok(hangzhou, '应派生出 c-hangzhou 对话');
+    assert.strictEqual(hangzhou.title, '帮我排一个杭州行程');
+    assert.ok(list.some((item) => item.id === 'default'), 'default 对话恒在');
+  });
+
+  await check('行程改名（v3.5.0）', () => {    const memory = require('../brain/memory');
     const record = memory.emptyRecord('smoke-rename');
     const created = memory.upsertItinerary(record.userId, { destination: '云南', days: [{}] }, { mode: 'create' });
     const renamed = memory.renameItinerary(record.userId, created.itinerary.id, '云南蜜月之旅');

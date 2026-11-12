@@ -87,6 +87,13 @@ function run(args, context) {
     if (!userId) return { ok: false, error: '缺少用户上下文' };
     const plan = memory.getPlan(userId, planId);
     if (!plan) return { ok: false, error: '找不到该行程方案（plan_id=' + planId + '），请先用 get_plan 查' };
+    // v3.8.0：已完成的行程不能直接修改（工具层第一道拦截；落库层 memory.upsertItinerary 还有双保险）
+    if (plan.status === 'completed') {
+      return {
+        ok: false,
+        error: '这份行程已完成，不能直接修改；请先和用户确认是否退回状态（update_plan_status 退回 draft 或 in_progress），退回后再修改',
+      };
+    }
     const merged = {
       ...plan,
       ...{
@@ -96,7 +103,12 @@ function run(args, context) {
       },
     };
     const checked = buildItinerary(merged, args.days, warnings);
-    return { ok: true, itinerary: { ...checked, id: plan.id, mode: 'update' }, warnings };
+    // v3.8.0：conversationId 从工具上下文回传（agent 已把当前对话传入 dispatch），落库时记录归属
+    return {
+      ok: true,
+      itinerary: { ...checked, id: plan.id, mode: 'update', conversationId: context.conversationId },
+      warnings,
+    };
   }
 
   const days = [];
@@ -142,7 +154,12 @@ function run(args, context) {
     days,
     warnings,
   );
-  return { ok: true, itinerary: { ...checked, mode: 'create' }, warnings };
+  // v3.8.0：conversationId 从工具上下文回传，落库时记录行程归属对话
+  return {
+    ok: true,
+    itinerary: { ...checked, mode: 'create', conversationId: context.conversationId },
+    warnings,
+  };
 }
 
 // v3.5.0：行程名默认带创建日期，方便用户区分多次行程（用户可自行改名）

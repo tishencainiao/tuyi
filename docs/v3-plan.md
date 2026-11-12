@@ -298,3 +298,10 @@
 - 旅行相册：brain/album.js（data/album/<userId>.json + data/photos/，≤200 张、单张 ≤3MB、备注 ≤60 字；上传可关联行程、改备注、删除；删行程只解除关联不删照片）；新增「相册」页。
 - 测试：unit 43/43（auth 改用户名、account 3 项、album 5 项）、smoke 35/35（3 个账号用例改邮箱注册）、check.js、lint、build 全过。
 - 浏览器实测：注册页两页签；test1 换头像（裁剪弹窗→确定→头部与个人卡片同步更新）；改用户名 小忆测试→改回 test1；相册上传→归类到「北京七天六晚」→备注→删除全链路通过。
+
+### v3.8.0 行程保护与对话隔离（2026-11-12）
+- ①已完成行程不可直接修改：tools/plan-trip.js update 分支 completed 拦截（第一道）+ brain/memory.js upsertItinerary 落库层硬拦截（双保险）；persona 生命周期第 6 条（先征得用户同意 update_plan_status 退回再改）；PlanCard 已完成状态隐藏「在这基础上修改」、主按钮变「退回并修改」（Popconfirm 确认后退回 draft 并自动填入修改话术）。
+- ③④对话隔离：行程数据加 conversationId（schemaVersion 2→3，旧数据惰性补 'default'）；plan_trip 从工具上下文回传、agent 落库时记录；GET /api/conversations 从 turns 派生（标题=首条用户消息截 12 字）；聊天页顶部对话下拉 +「新对话」按钮（crypto.randomUUID，localStorage 记忆当前对话，刷新回到上次对话）；行程卡只显示当前对话的、按 updatedAt 排序（修改后不再乱跳）；删除行程的记事写进该行程所属对话；跨对话记忆注入保留（renderBlock 仍全局）。
+- 修复：v3.8 方案落地时发现 server.js 的 /api/conversations 路由与 plans 的 conversationId 字段漏改（原「待改」清单未执行），API 层验证时暴露后补齐。
+- 测试：smoke 37/37（新增已完成拦截、对话归属与列表 2 项）、unit 43/43、check.js、build 全过。
+- 浏览器实测（test1）：对话下拉显示「默认对话」与新建对话（首条消息自动成为标题）；新对话 → 发「你好，我叫测试员」→ 下拉出现该对话、切回默认对话 6 份行程 + 40 条消息完整；已完成行程「北京两天一晚」点「退回并修改」→ 确认后状态变草稿、输入框自动填入修改话术（测后已恢复 completed）；测试产生的对话与记忆已从 test1 数据清理。

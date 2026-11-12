@@ -16,6 +16,7 @@
  *   POST /api/onboard                         完成注册引导（写入资料并标记 onboarded）
  *   POST /api/chat      {message,conversationId?}  SSE 流式对话（userId 从 session 取）
  *   GET  /api/history   ?conversationId=      会话历史
+ *   GET  /api/conversations                    对话列表（v3.8.0 从消息派生，标题取首条用户消息）
  *   GET  /api/profile                         本人画像 / 记忆 / 行程
  *   GET  /api/stats/personal                  个人统计
  *   GET  /api/visits                          去过地（手动点亮）
@@ -367,6 +368,13 @@ function handleHistory(url, req, res) {
   return sendJSON(res, 200, { conversationId, turns });
 }
 
+// v3.8.0：对话列表（从消息派生，零迁移）
+function handleConversations(req, res) {
+  const user = currentUser(req);
+  if (!user) return sendJSON(res, 401, { error: '未登录' });
+  return sendJSON(res, 200, { conversations: memory.listConversations(user.userId) });
+}
+
 function handleProfile(url, req, res) {
   const user = currentUser(req);
   if (!user) return sendJSON(res, 401, { error: '未登录' });
@@ -435,6 +443,7 @@ function handlePlansList(req, res) {
     revisions: item.revisions || 0,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
+    conversationId: item.conversationId || 'default', // v3.8.0：行程归属对话
   }));
   return sendJSON(res, 200, { plans });
 }
@@ -523,6 +532,7 @@ const server = http.createServer((req, res) => {
   if (method === 'GET' && pathname === '/api/health') return sendJSON(res, 200, health());
   if (method === 'POST' && pathname === '/api/chat') return handleChat(req, res);
   if (method === 'GET' && pathname === '/api/history') return handleHistory(url, req, res);
+  if (method === 'GET' && pathname === '/api/conversations') return handleConversations(req, res); // v3.8.0
   if (method === 'GET' && pathname === '/api/profile') return handleProfile(url, req, res);
   if (method === 'POST' && pathname === '/api/memory') return handleMemoryCreate(req, res);
   const memoryPath = pathname.match(/^\/api\/memory\/([^/]+)$/);
