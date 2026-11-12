@@ -3,7 +3,7 @@
 /**
  * 个人资料（v3.2.0）
  *
- * - 资料：昵称 / 年龄 / 性别 / 同行家人朋友 / 偏好标签 / 旅行风格 / 健康备注
+ * - 资料：昵称 / 年龄 / 性别 / 同行家人朋友 / 偏好标签 / 旅行风格 / 健康备注 / simple_mode（v3.9.0 简易模式，默认 true）
  * - 来源标记：每字段带 sources[field] = 'confirmed'（用户填写，当前唯一来源）；
  *   结构上预留 'inferred'（对话抽取，后续版本实现，借 Momo user-profile.js 思路）
  * - 存储：data/user-profile/<userId>.json（与记忆 data/memory/<userId>.json 分开）
@@ -17,7 +17,7 @@ const ROOT = path.join(__dirname, '..');
 const DATA_DIR = process.env.TUYI_DATA_DIR || path.join(ROOT, 'data');
 const PROFILE_DIR = path.join(DATA_DIR, 'user-profile');
 
-const FIELDS = ['nickname', 'age', 'gender', 'companions', 'preferences', 'travel_style', 'health_notes'];
+const FIELDS = ['nickname', 'age', 'gender', 'companions', 'preferences', 'travel_style', 'health_notes', 'simple_mode'];
 const GENDERS = ['男', '女', '保密'];
 const PROFILE_SCHEMA = 1; // v3.4.0：资料文件 schema 版本（读时容忍缺失，写时补齐）
 
@@ -51,6 +51,7 @@ function emptyProfile(userId) {
     preferences: [],
     travel_style: '',
     health_notes: '',
+    simple_mode: true, // v3.9.0：新手简易模式，默认开启
     sources: {},
     updatedAt: null,
   };
@@ -159,6 +160,10 @@ function updateProfile(userId, patch) {
     const value = cleanString(patch.health_notes, 200);
     next.health_notes = value;
     touched.push('health_notes');
+  }
+  if ('simple_mode' in patch) {
+    next.simple_mode = patch.simple_mode === true; // 只认布尔 true，其余一律 false
+    touched.push('simple_mode');
   }
 
   next.sources = { ...(profile.sources || {}) };

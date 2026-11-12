@@ -68,3 +68,16 @@ test('renderProfileBlock：有值才注入，包含关键信息', () => {
   assert.ok(block.includes('68'));
   assert.ok(block.includes('松弛'));
 });
+
+test('simple_mode：空资料默认开启，可显式关闭并持久化（v3.9.0）', () => {
+  const empty = profile.getProfile('u-sm-empty');
+  assert.equal(empty.simple_mode, true);
+  const off = profile.updateProfile('u-sm', { simple_mode: false });
+  assert.ok(off.ok);
+  assert.equal(off.profile.simple_mode, false);
+  assert.equal(off.profile.sources.simple_mode, 'confirmed');
+  // 重新读取仍在（持久化）
+  assert.equal(profile.getProfile('u-sm').simple_mode, false);
+  const on = profile.updateProfile('u-sm', { simple_mode: true });
+  assert.equal(on.profile.simple_mode, true);
+});

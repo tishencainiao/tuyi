@@ -305,3 +305,10 @@
 - 修复：v3.8 方案落地时发现 server.js 的 /api/conversations 路由与 plans 的 conversationId 字段漏改（原「待改」清单未执行），API 层验证时暴露后补齐。
 - 测试：smoke 37/37（新增已完成拦截、对话归属与列表 2 项）、unit 43/43、check.js、build 全过。
 - 浏览器实测（test1）：对话下拉显示「默认对话」与新建对话（首条消息自动成为标题）；新对话 → 发「你好，我叫测试员」→ 下拉出现该对话、切回默认对话 6 份行程 + 40 条消息完整；已完成行程「北京两天一晚」点「退回并修改」→ 确认后状态变草稿、输入框自动填入修改话术（测后已恢复 completed）；测试产生的对话与记忆已从 test1 数据清理。
+
+### v3.9.0 新手引导简化（2026-11-12）
+- ②简易模式：brain/profile.js FIELDS 加 simple_mode（布尔，旧文件缺失默认 true=老用户也默认开启）；updateProfile 白名单支持 simple_mode（只认布尔 true，其余一律 false）。
+- 前端：ChatPage 空态（simple_mode=true）显示教学卡（你可以和我说 / 我能给你 两块 + 快速开始按钮）；新建 web/src/components/QuickStartModal.tsx 意向表（目的地 / 出发日期 / 玩几天 / 预算 / 同行人 / 兴趣偏好，全部可跳过），提交拼成「帮我规划一次旅行：目的地柳州，玩 2 天，预算 1500 元」式的一句话直接 send()；send 支持外部传入文本。
+- 个人中心：个人资料卡底部加「新手简易模式」Switch（PUT /api/userinfo simple_mode，sources 标 confirmed）；关闭后聊天空态回到简单欢迎语。
+- 测试：unit 新增 simple_mode 用例（默认 true / 关闭持久化 / 重开）44/44；smoke 37/37、check.js、lint、build 全过。
+- 浏览器实测（test1）：新对话空态显示教学卡；点快速开始填「柳州 + 2 天 + 1500」→ 生成消息「帮我规划一次旅行：目的地柳州，玩 2 天，预算 1500 元」直接发送，小忆按资料（带外婆、松弛）生成柳州草稿行程，对话下拉标题自动变为该句截 12 字；个人中心关开关 → 新对话空态回到简单欢迎语、再开恢复教学卡；/api/userinfo 验证 simple_mode 持久化。测后已清理：柳州行程与测试对话 turns、两条测试记忆已删，simple_mode 恢复 true。

@@ -5,6 +5,7 @@ import { MessageOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import { api, chatStream, Conversation, Itinerary, PlanStatus } from '../api';
 import PlanCard from '../components/PlanCard';
+import QuickStartModal from '../components/QuickStartModal';
 
 interface Msg {
   role: 'user' | 'assistant';
@@ -110,7 +111,25 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [lastActivity, setLastActivity] = useState(() => Date.now());
+  // v3.9.0：新手简易模式（默认 true，个人中心可关）；加载 userinfo 后生效
+  const [simpleMode, setSimpleMode] = useState(true);
+  const [quickOpen, setQuickOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .userinfo()
+      .then((data) => {
+        if (alive) setSimpleMode(data.profile.simple_mode !== false);
+      })
+      .catch(() => {
+        /* 读不到资料就保持默认简易模式 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const persistConversation = (id: string) => {
     try {
@@ -285,8 +304,9 @@ export default function ChatPage() {
       });
   };
 
-  const send = async () => {
-    const text = input.trim();
+  // v3.9.0：send 支持外部传入文本（意向表直接发消息）
+  const send = async (prefilled?: string) => {
+    const text = (prefilled ?? input).trim();
     if (!text || sending) return;
     setInput('');
     setSending(true);
@@ -412,7 +432,26 @@ export default function ChatPage() {
             <p className="muted" style={{ margin: '0 0 20px' }}>
               告诉我你想去哪里，我来帮你排路线、查天气、算预算
             </p>
-            <div className="chat-suggestions">
+            {simpleMode ? (
+              <div className="teach-card">
+                <div className="teach-block">
+                  <div className="teach-title">你可以和我说</div>
+                  <div className="teach-line">「帮我排一次柳州 3 日游」</div>
+                  <div className="teach-line">「查一下丽江明天的天气」</div>
+                  <div className="teach-line">「把第 2 天改成室内的安排」</div>
+                </div>
+                <div className="teach-block">
+                  <div className="teach-title">我能给你</div>
+                  <div className="teach-line">路线 + 景点 + 天气 + 预算，一份可修改的行程</div>
+                  <div className="teach-line">记住你的偏好，下次排得更合口味</div>
+                  <div className="teach-line">行程确认 / 出发 / 完成，地图点亮你去过的城市</div>
+                </div>
+                <Button type="primary" size="large" onClick={() => setQuickOpen(true)}>
+                  第一次用？点我快速开始，填个表小忆直接帮你排
+                </Button>
+              </div>
+            ) : null}
+            <div className="chat-suggestions" style={{ marginTop: 20 }}>
               {SUGGESTIONS.map((suggestion) => (
                 <Tag key={suggestion} onClick={() => setInput(suggestion)}>
                   {suggestion}
@@ -471,6 +510,15 @@ export default function ChatPage() {
       </div>
 
       <XiaoyiLive busy={sending} lastActivity={lastActivity} />
+
+      <QuickStartModal
+        open={quickOpen}
+        onCancel={() => setQuickOpen(false)}
+        onSubmit={(text) => {
+          setQuickOpen(false);
+          void send(text);
+        }}
+      />
 
       <div className="chat-input">
         <Input.TextArea

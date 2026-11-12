@@ -34,6 +34,7 @@ export interface UserInfo {
   preferences: string[];
   travel_style: string;
   health_notes: string;
+  simple_mode: boolean; // v3.9.0 新手简易模式
   sources: Record<string, string>;
   updatedAt: string | null;
 }

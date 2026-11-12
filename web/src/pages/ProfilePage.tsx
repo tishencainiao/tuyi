@@ -7,6 +7,7 @@ import {
   Card,
   Col,
   Descriptions,
+  Divider,
   Empty,
   Form,
   Input,
@@ -16,6 +17,7 @@ import {
   Row,
   Select,
   Spin,
+  Switch,
   Tag,
   Typography,
   Upload,
@@ -59,6 +61,8 @@ export default function ProfilePage() {
   const [userInfo, setUserInfo] = useState<UserInfoResponse | null>(null);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
+  // v3.9.0 简易模式开关
+  const [simpleSaving, setSimpleSaving] = useState(false);
 
   const [newText, setNewText] = useState('');
   const [newTags, setNewTags] = useState<string[]>([]);
@@ -195,6 +199,20 @@ export default function ProfilePage() {
       message.error(err instanceof ApiError ? err.message : '保存失败');
     } finally {
       setProfileSaving(false);
+    }
+  };
+
+  // v3.9.0 简易模式开关
+  const handleSimpleMode = async (checked: boolean) => {
+    setSimpleSaving(true);
+    try {
+      const data = await api.updateUserinfo({ simple_mode: checked });
+      setUserInfo((prev) => (prev ? { ...prev, profile: data.profile } : prev));
+      message.success(checked ? '已开启新手简易模式' : '已关闭新手简易模式');
+    } catch (err) {
+      message.error(err instanceof ApiError ? err.message : '设置失败');
+    } finally {
+      setSimpleSaving(false);
     }
   };
 
@@ -390,6 +408,20 @@ export default function ProfilePage() {
                 </Button>
               </Empty>
             )}
+            <Divider style={{ margin: '12px 0' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>新手简易模式</div>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  开启后，新对话会显示小忆教学卡和「快速开始」意向表
+                </div>
+              </div>
+              <Switch
+                checked={userInfo ? userInfo.profile.simple_mode !== false : true}
+                onChange={handleSimpleMode}
+                loading={simpleSaving}
+              />
+            </div>
           </Card>
 
           <Card title="小忆对我的了解" size="small">
