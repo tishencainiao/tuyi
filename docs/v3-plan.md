@@ -323,3 +323,10 @@
 - 前端：ChatPage XiaoyiLive 组件 <video>+状态小字 → <img src="/xiaoyi/<动作>.webp">（168×168，忙碌播工作动作、30 秒无操作播休闲动作、平时隐藏——沿用 v3.5.0 行为）；styles.css 删 .xiaoyi-live 的卡片背景/圆角/overflow 与 .xiaoyi-live-label 状态小字，img 加 pointer-events:none。
 - 测试：check.js、smoke 37/37、unit 44/44、npm run build 全过（dist entry 89KB）。
 - 浏览器实测（test1）：canvas 采样验证动画 WebP 四角 alpha=0、中心 255、opaqueRatio 0.342；发送消息触发工作动作 work-map.webp；回复完成 30 秒无操作后切休闲动作 idle-nap.webp；卡片 computed style 背景透明、无圆角、无状态小字。测后清理：测试产生的 2 轮对话 turns 已删，test1 回到 40 turns / 6 itineraries / 18 memories。
+
+### v3.11.0 小忆安静模式（2026-11-21）
+- 背景：用户反馈小忆「太好动」——回复完成后 30 秒起休闲动画无限循环、每 30 秒轮换，一直在表演。需求=平时站着、微微动像活着；动作只在该动的时候动。方案 A+休闲彩蛋保留（用户拍板）。
+- 素材：零新增外部素材。闭眼帧用 tools/xiaoyi-matting/make_blink.py 本地生成（PIL 连通块定位两只眼睛（立绘 2048×2048，眼睛 bbox (766,826,860,935)/(1146,831,1192,919)），眼睛区域填皮肤色（取 bbox 外圈中位色）+ 画 ∩ 形深棕弧线（中间上抬 3px）；验证=眼睛区域外与立绘像素零差异）；输出 web/public/xiaoyi/xiaoyi-blink.png。
+- 状态机（ChatPage.tsx XiaoyiLive 重写）：①站立（默认常驻）=站姿立绘 + 容器 CSS 呼吸动画 xiaoyi-breathe（scale 1→1.03+上浮 3px，3s 循环，动画加在容器上避免眨眼切换中断动画）+ 每 4~6 秒随机眨眼（闭眼 120ms）；②忙碌=工作动画（固定 work-map，不轮换），结束回站立；③彩蛋=每 3~5 分钟随机一次、播一轮约 2 秒回站立（不再 30s 轮换）。删除 IDLE_AFTER_MS/VIDEO_SWITCH_MS/lastActivity（不再需要）。
+- 测试：check.js、smoke 37/37、unit 44/44、build 全过。
+- 浏览器实测（test1，彩蛋间隔临时缩短为 8~12 秒验证后改回 3~5 分钟）：事件记录器 45 秒捕获——站立常驻；眨眼发生在 8.7/13.7/21.8/26.4/34.5/45.0s（间隔 4~8s、每次闭眼约 0.1~0.2s）；彩蛋发生在 2.6/15.5/26.9/37.3s（每次约 2 秒后回站立）；发送天气消息后 0.1s 切工作动画、回复完成（约 4.8s）回站立；容器 computed animationName=xiaoyi-breathe、duration 3s。测后清理测试对话，test1 回 40 turns/6 itineraries/18 memories。

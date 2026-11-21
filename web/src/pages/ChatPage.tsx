@@ -40,49 +40,89 @@ const SUGGESTIONS = [
   '我想去云南玩 5 天，预算 3000 元',
 ];
 
-const IDLE_AFTER_MS = 30000;
-// v3.5.0：动作频率降低——忙碌时固定一个动作不轮换；休闲时每 30 秒换一个
-const VIDEO_SWITCH_MS = 30000;
+// v3.5.0：动作频率降低——忙碌时固定一个动作不轮换
 const WORK_VIDEOS = ['work-map', 'work-hand-plan', 'work-typing'];
 const IDLE_VIDEOS = ['idle-nap', 'idle-milktea', 'idle-spin'];
 
 // v3.8.0：当前对话存 localStorage，刷新后回到上次的对话
 const CONV_KEY = 'tuyi-conversation-id';
 
-/** 小忆动态形象：生成方案时播工作动作；30 秒没动静播休闲动作；平时隐藏。
- *  v3.10.0：素材改为透明动画 WebP（rembg 本地抠图），浮在页面上、无卡片背景、无状态小字。 */
-function XiaoyiLive({ busy, lastActivity }: { busy: boolean; lastActivity: number }) {
-  const [mode, setMode] = useState<'work' | 'idle' | null>(null);
+/** 小忆动态形象（v3.11.0 状态机）：
+ *  平时常驻「站立微动」——站姿立绘 + CSS 呼吸浮动 + 每 4~6 秒眨一次眼（120ms 闭眼帧），像活着；
+ *  生成方案（busy）时播工作动作，结束回站立；
+ *  休闲动作改稀发彩蛋——回复完成后每 3~5 分钟随机一次、播约 2 秒就回站立，不再一直表演。
+ *  v3.10.0：素材为透明动画 WebP（rembg 本地抠图），浮在页面上、无卡片背景、无状态小字。 */
+function XiaoyiLive({ busy }: { busy: boolean }) {
+  const [mode, setMode] = useState<'work' | 'egg' | null>(null);
   const [videoIndex, setVideoIndex] = useState(0);
+  const [blink, setBlink] = useState(false);
 
+  // 忙碌 → 工作动作（固定第一个，不轮换）；结束回站立
   useEffect(() => {
     if (busy) {
       setMode('work');
       setVideoIndex(0);
-      return;
+    } else if (mode === 'work') {
+      setMode(null);
     }
-    const check = () => setMode(Date.now() - lastActivity > IDLE_AFTER_MS ? 'idle' : null);
-    check();
-    const timer = window.setInterval(check, 3000);
-    return () => window.clearInterval(timer);
-  }, [busy, lastActivity]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy]);
 
-  // 动画 WebP 无限循环不会触发事件，用定时器轮换动作；忙碌时不轮换
+  // 稀发彩蛋：不在忙碌且非彩蛋中时，随机 3~5 分钟后播一次休闲动作，约 2 秒回站立
   useEffect(() => {
-    if (!mode || mode === 'work') return;
-    const timer = window.setInterval(() => setVideoIndex((index) => index + 1), VIDEO_SWITCH_MS);
-    return () => window.clearInterval(timer);
+    if (busy || mode === 'egg') return;
+    const delay = 180000 + Math.random() * 120000; // 3~5 分钟
+    const timer = window.setTimeout(() => {
+      setVideoIndex(Math.floor(Math.random() * IDLE_VIDEOS.length));
+      setMode('egg');
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [busy, mode]);
+
+  // 彩蛋播约 2 秒（一轮）后回站立
+  useEffect(() => {
+    if (mode !== 'egg') return;
+    const timer = window.setTimeout(() => setMode(null), 2000);
+    return () => window.clearTimeout(timer);
   }, [mode]);
 
-  const list = mode === 'work' ? WORK_VIDEOS : mode === 'idle' ? IDLE_VIDEOS : null;
-  if (!list) return null;
-  const name = list[videoIndex % list.length];
+  // 站立时每 4~6 秒眨一次眼（闭眼 120ms）
+  useEffect(() => {
+    if (mode !== null) {
+      setBlink(false);
+      return;
+    }
+    let timer: number;
+    let blinkTimer: number;
+    const schedule = () => {
+      timer = window.setTimeout(() => {
+        setBlink(true);
+        blinkTimer = window.setTimeout(() => setBlink(false), 120);
+        schedule();
+      }, 4000 + Math.random() * 2000);
+    };
+    schedule();
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(blinkTimer);
+    };
+  }, [mode]);
+
+  const src =
+    mode === 'work'
+      ? '/xiaoyi/' + WORK_VIDEOS[0] + '.webp'
+      : mode === 'egg'
+        ? '/xiaoyi/' + IDLE_VIDEOS[videoIndex % IDLE_VIDEOS.length] + '.webp'
+        : blink
+          ? '/xiaoyi/xiaoyi-blink.png'
+          : '/xiaoyi/xiaoyi-standing.png';
 
   return (
-    <div className="xiaoyi-live">
+    <div className={'xiaoyi-live' + (mode === null ? ' xiaoyi-live--standing' : '')}>
       <img
-        key={mode + '-' + name}
-        src={'/xiaoyi/' + name + '.webp'}
+        key={mode + '-' + (mode === null ? (blink ? 'b' : 's') : src)}
+        className={mode === null ? 'xiaoyi-standing' : undefined}
+        src={src}
         alt="小忆"
         style={{ width: '168px', height: '168px', objectFit: 'contain' }}
       />
@@ -107,7 +147,6 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [input, setInput] = useState('');
   const [loaded, setLoaded] = useState(false);
-  const [lastActivity, setLastActivity] = useState(() => Date.now());
   // v3.9.0：新手简易模式（默认 true，个人中心可关）；加载 userinfo 后生效
   const [simpleMode, setSimpleMode] = useState(true);
   const [quickOpen, setQuickOpen] = useState(false);
@@ -269,7 +308,6 @@ export default function ChatPage() {
     setPlans([]);
     setTool(null);
     setLoaded(false);
-    setLastActivity(Date.now());
   };
 
   // v3.8.0：新对话 = 新旅途（对话列表由服务端从消息派生，第一句话后自动出现）
@@ -288,7 +326,6 @@ export default function ChatPage() {
     setTool(null);
     setLoaded(true);
     setInput('');
-    setLastActivity(Date.now());
   };
 
   // v3.8.0：一轮对话结束后刷新对话列表（新对话的首条消息会成为它的标题）
@@ -307,7 +344,6 @@ export default function ChatPage() {
     if (!text || sending) return;
     setInput('');
     setSending(true);
-    setLastActivity(Date.now());
     // v3.5.0 修复：assistant 气泡创建时就带 ts，保证时间线排序稳定——
     // 之前流式结束后 assistant 没有 ts，会被排到最后，新消息反而被旧回复挤到上方
     const now = new Date().toISOString();
@@ -349,8 +385,7 @@ export default function ChatPage() {
         onDone: () => {
           setTool(null);
           patchAssistant({ streaming: false });
-          setLastActivity(Date.now());
-          refreshConversations();
+                refreshConversations();
         },
         onError: (errorText) => {
           setTool(null);
@@ -366,8 +401,7 @@ export default function ChatPage() {
       });
     } finally {
       setSending(false);
-      setLastActivity(Date.now());
-    }
+      }
   };
 
   const onPressEnter = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -506,7 +540,7 @@ export default function ChatPage() {
         ) : null}
       </div>
 
-      <XiaoyiLive busy={sending} lastActivity={lastActivity} />
+      <XiaoyiLive busy={sending} />
 
       <QuickStartModal
         open={quickOpen}
@@ -522,8 +556,7 @@ export default function ChatPage() {
           value={input}
           onChange={(event) => {
             setInput(event.target.value);
-            setLastActivity(Date.now());
-          }}
+                  }}
           onPressEnter={onPressEnter}
           placeholder="说点什么…（Enter 发送，Shift+Enter 换行）"
           autoSize={{ minRows: 1, maxRows: 4 }}

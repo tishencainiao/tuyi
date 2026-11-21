@@ -460,6 +460,20 @@ body {
   user-select: none;
 }
 
+/* v3.11.0：站立微动——呼吸缩放+缓慢浮动，3 秒一个循环；动画加在容器上，眨眼切换图片不会中断 */
+.xiaoyi-live--standing {
+  animation: xiaoyi-breathe 3s ease-in-out infinite;
+}
+
+@keyframes xiaoyi-breathe {
+  0%, 100% {
+    transform: scale(1) translateY(0);
+  }
+  50% {
+    transform: scale(1.03) translateY(-3px);
+  }
+}
+
 @keyframes xiaoyi-pop {
   from {
     opacity: 0;
