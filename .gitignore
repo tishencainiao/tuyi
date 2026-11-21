@@ -9,3 +9,11 @@ __pycache__/
 .DS_Store
 
 backups/
+
+# 小忆抠图工具链（v3.10.0）：环境与产物不入库，仅保留脚本
+tools/xiaoyi-matting/venv/
+tools/xiaoyi-matting/models/
+tools/xiaoyi-matting/work/
+tools/xiaoyi-matting/node_modules/
+tools/xiaoyi-matting/package.json
+tools/xiaoyi-matting/package-lock.json

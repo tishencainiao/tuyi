@@ -312,3 +312,14 @@
 - 个人中心：个人资料卡底部加「新手简易模式」Switch（PUT /api/userinfo simple_mode，sources 标 confirmed）；关闭后聊天空态回到简单欢迎语。
 - 测试：unit 新增 simple_mode 用例（默认 true / 关闭持久化 / 重开）44/44；smoke 37/37、check.js、lint、build 全过。
 - 浏览器实测（test1）：新对话空态显示教学卡；点快速开始填「柳州 + 2 天 + 1500」→ 生成消息「帮我规划一次旅行：目的地柳州，玩 2 天，预算 1500 元」直接发送，小忆按资料（带外婆、松弛）生成柳州草稿行程，对话下拉标题自动变为该句截 12 字；个人中心关开关 → 新对话空态回到简单欢迎语、再开恢复教学卡；/api/userinfo 验证 simple_mode 持久化。测后已清理：柳州行程与测试对话 turns、两条测试记忆已删，simple_mode 恢复 true。
+
+### v3.10.0 小忆透明动画（2026-11-21）
+- 背景：用户要「小忆像 Momo 一样背景透明」。即梦 AI 答复图片可抠透明、视频不支持 alpha。先后评估：①即梦抠 7 张图+CSS 轻动效 ②本地 ffmpeg+rembg 真动画 ③伪透明（改网页底色迁就米色视频）④毛玻璃卡片。用户先选 ①（自行去即梦抠图），因找不到抠图入口且接受不了定格+轻动效，最终拍板 ②（我全包）。
+- 工具链：venv 建在 tools/xiaoyi-matting/venv（pip 清华镜像；rembg 2.0.87 + onnxruntime 1.32.0 + av + pillow）；u2net.onnx 模型 168MB（HF 镜像仓库不存在、ghproxy 失败，GitHub 直连成功）。本机无 ffmpeg——imageio-ffmpeg 自带的静态 ffmpeg-win-x86_64-v9.0.2 用于抽帧。
+- 抽帧+抠图：tools/xiaoyi-matting/pipeline.py（12fps、宽 480，6 段视频共 363 帧，rembg u2net 逐帧抠图 363/363；立绘/logo 两张 PNG 一并抠透明；App 图标不抠）。质量抽查：5 段角落 alpha=0、中心 254，bbox 正常；idle-nap 中间帧中心透明属角色趴下正常现象。
+- WebM alpha 三次失败（根因=所有本地静态 ffmpeg 构建的 libvpx 未启用 VP9 alpha 支持）：①imageio-ffmpeg -pix_fmt/-vf 无效 ②PyAV libvpx-vp9 声明支持 yuva420p 实际编码丢 alpha，且 from_image/to_image 丢 alpha（需 from_ndarray format rgba）③npm 的 ffmpeg-static/@ffmpeg-installer 构建的 libvpx-vp9 Supported pixel formats 无 yuva 系列；gyan.dev/GitHub 官方构建下载失败（网络）。
+- 落地=动画 WebP：tools/xiaoyi-matting/make_webp_anim.py（360×360、12fps、quality 88、method 6）产出 6 个动画 WebP（842KB~1.03MB，Pillow 读回验证 RGBA 60/61 帧、角落 alpha=0）。<img> 原生支持 WebP 透明+无限循环，Chrome/Edge/Firefox/Safari16+ 全覆盖。
+- 素材：scripts/build-xiaoyi-assets.py 重跑（源图变透明后 avatar/favicon/brand-logo/hero 派生图随之透明）；web/public/xiaoyi/ 删 6 旧 MP4 与失败 webm，最终 13 文件 11MB。
+- 前端：ChatPage XiaoyiLive 组件 <video>+状态小字 → <img src="/xiaoyi/<动作>.webp">（168×168，忙碌播工作动作、30 秒无操作播休闲动作、平时隐藏——沿用 v3.5.0 行为）；styles.css 删 .xiaoyi-live 的卡片背景/圆角/overflow 与 .xiaoyi-live-label 状态小字，img 加 pointer-events:none。
+- 测试：check.js、smoke 37/37、unit 44/44、npm run build 全过（dist entry 89KB）。
+- 浏览器实测（test1）：canvas 采样验证动画 WebP 四角 alpha=0、中心 255、opaqueRatio 0.342；发送消息触发工作动作 work-map.webp；回复完成 30 秒无操作后切休闲动作 idle-nap.webp；卡片 computed style 背景透明、无圆角、无状态小字。测后清理：测试产生的 2 轮对话 turns 已删，test1 回到 40 turns / 6 itineraries / 18 memories。

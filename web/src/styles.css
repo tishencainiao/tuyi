@@ -444,28 +444,20 @@ body {
   color: var(--tuyi-sky-deep);
 }
 
-/* 小忆动态形象卡片（v3.5.0：右上角、与聊天背景同色融为一体） */
+/* 小忆动态形象（v3.10.0：透明动画 WebP，浮在页面上，无卡片背景/状态小字） */
 .xiaoyi-live {
   position: absolute;
   right: 24px;
   top: 96px;
   width: 168px;
-  border-radius: 16px;
-  overflow: hidden;
-  background: var(--tuyi-bg);
   z-index: 10;
   animation: xiaoyi-pop 0.35s ease;
 }
 
-.xiaoyi-live video {
+.xiaoyi-live img {
   display: block;
-}
-
-.xiaoyi-live-label {
-  font-size: 12px;
-  color: var(--tuyi-sub);
-  text-align: center;
-  padding: 4px 0 6px;
+  pointer-events: none;
+  user-select: none;
 }
 
 @keyframes xiaoyi-pop {
@@ -547,6 +539,10 @@ body {
     width: 132px;
     right: 12px;
     bottom: 88px;
+  }
+  .xiaoyi-live img {
+    width: 132px;
+    height: 132px;
   }
 }
 

@@ -49,7 +49,8 @@ const IDLE_VIDEOS = ['idle-nap', 'idle-milktea', 'idle-spin'];
 // v3.8.0：当前对话存 localStorage，刷新后回到上次的对话
 const CONV_KEY = 'tuyi-conversation-id';
 
-/** 小忆动态形象：生成方案时播工作动作；30 秒没动静播休闲动作；平时隐藏。 */
+/** 小忆动态形象：生成方案时播工作动作；30 秒没动静播休闲动作；平时隐藏。
+ *  v3.10.0：素材改为透明动画 WebP（rembg 本地抠图），浮在页面上、无卡片背景、无状态小字。 */
 function XiaoyiLive({ busy, lastActivity }: { busy: boolean; lastActivity: number }) {
   const [mode, setMode] = useState<'work' | 'idle' | null>(null);
   const [videoIndex, setVideoIndex] = useState(0);
@@ -66,7 +67,7 @@ function XiaoyiLive({ busy, lastActivity }: { busy: boolean; lastActivity: numbe
     return () => window.clearInterval(timer);
   }, [busy, lastActivity]);
 
-  // loop 视频不会触发 onEnded，用定时器轮换动作；忙碌时不轮换
+  // 动画 WebP 无限循环不会触发事件，用定时器轮换动作；忙碌时不轮换
   useEffect(() => {
     if (!mode || mode === 'work') return;
     const timer = window.setInterval(() => setVideoIndex((index) => index + 1), VIDEO_SWITCH_MS);
@@ -79,16 +80,12 @@ function XiaoyiLive({ busy, lastActivity }: { busy: boolean; lastActivity: numbe
 
   return (
     <div className="xiaoyi-live">
-      <video
+      <img
         key={mode + '-' + name}
-        src={'/xiaoyi/' + name + '.mp4'}
-        autoPlay
-        loop
-        muted
-        playsInline
-        style={{ width: '100%', height: '168px', objectFit: 'cover' }}
+        src={'/xiaoyi/' + name + '.webp'}
+        alt="小忆"
+        style={{ width: '168px', height: '168px', objectFit: 'contain' }}
       />
-      <div className="xiaoyi-live-label">{mode === 'work' ? '小忆正在排行程…' : '小忆在发呆…'}</div>
     </div>
   );
 }
